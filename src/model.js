@@ -24,8 +24,18 @@ export function newEvent(p = {}) {
 }
 
 export function newSummary(title = 'Ny opsummering') {
-  return { id: uid('su'), title, body: '', links: [] }; // links: [{refId, label}]
+  return { id: uid('su'), title, body: '', links: [], anchorDate: null }; // links: [{refId, label}]
 }
+
+// Dokument-type ud fra mime/filnavn → styrer preview + ikon.
+export function fileKind(mime = '', name = '') {
+  const m = (mime || '').toLowerCase(), n = (name || '').toLowerCase();
+  if (m.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(n)) return 'image';
+  if (m === 'application/pdf' || n.endsWith('.pdf')) return 'pdf';
+  if (m.includes('word') || m.includes('officedocument') || /\.(docx?|rtf|odt)$/.test(n)) return 'word';
+  return 'other';
+}
+export const kindIcon = (k) => ({ image: '🖼️', pdf: '📄', word: '📝', other: '📎' }[k] || '📎');
 
 // KERNE-LOGIK (testet): kronologisk sortering. ISO-datoer sorteres korrekt som strenge.
 export function sortEvents(events) {
