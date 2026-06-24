@@ -8,7 +8,7 @@ export const uid = (p = 'id') =>
 export const today = () => new Date().toISOString().slice(0, 10);
 
 export function newCase(title = 'Ny sag') {
-  return { schema: SCHEMA, title, meta: {}, events: [], summaries: [] };
+  return { id: uid('case'), schema: SCHEMA, title, meta: {}, events: [], summaries: [], updated: Date.now() };
 }
 
 export function newEvent(p = {}) {

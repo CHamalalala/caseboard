@@ -3,7 +3,10 @@
 body{margin:0;font-family:"Segoe UI",Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:14px}
 .boot{padding:40px;text-align:center;color:#888}
 .topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;background:var(--navy);color:#fff;padding:10px 16px;box-shadow:0 2px 10px rgba(0,0,0,.2)}
-.brand{font-weight:800;font-size:16px;white-space:nowrap}
+.brand{font-weight:800;font-size:16px;white-space:nowrap;cursor:pointer}
+.nav{display:flex;gap:6px;align-items:center}
+.btn.nav-btn{background:#33508a;padding:6px 10px}
+.tools.center{justify-content:center;margin:0}
 .casetitle{font-weight:600;font-size:15px;color:#dce6f7;min-width:120px;outline:none}
 .tools{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .btn{border:0;border-radius:6px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;background:#33508a;color:#fff}
@@ -15,6 +18,17 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .muted{color:#8a93a6;font-style:italic;font-size:13px}
 .empty{grid-column:1/-1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:30px;text-align:center}
 .empty h2{font-size:20px;color:var(--navy)}
+/* Hjem / Mine sager */
+.home{max-width:1100px;margin:22px auto;padding:0 16px}
+.casegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.casecard{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:10px;padding:14px;cursor:pointer;transition:.12s;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.casecard:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(20,33,61,.12)}
+.cc-title{font-weight:700;font-size:15px;color:var(--navy);margin-bottom:6px}
+.cc-meta{font-size:12px;color:#6b7280}.cc-meta.sub{margin-top:2px;color:#9aa3b2}
+.cc-actions{margin-top:12px;display:flex;gap:6px}
+.btn.sm{padding:4px 9px;font-size:12px;color:#33508a;border-color:#cdd8ef}
+.casecard.add{display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed #c3cee2;color:#7d8aa3;border-left-width:2px;min-height:108px}
+.casecard.add .plus{font-size:30px;line-height:1}
 .card{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:8px;padding:10px 12px;margin:0 0 10px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .card.ev{cursor:grab}.card.ev:active{cursor:grabbing}
 .type-mail{border-left-color:var(--blue)}.type-dokument{border-left-color:var(--doc)}.type-handling{border-left-color:var(--soren)}.type-note{border-left-color:#888}
