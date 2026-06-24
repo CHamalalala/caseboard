@@ -1,0 +1,11 @@
+{
+  "name": "caseboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Universal, privat sagsførings-app (PWA). Data gemmes lokalt.",
+  "scripts": {
+    "test": "node tests/core.test.mjs",
+    "serve": "python -m http.server 8077"
+  }
+}

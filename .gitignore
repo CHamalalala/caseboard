@@ -1,0 +1,8 @@
+# Fortrolighed: aldrig committe rigtige sags-data (kun app-koden hostes)
+*.caseboard.json
+seed-uglebakken*.json
+src/seed-*.json
+
+node_modules/
+.DS_Store
+Thumbs.db
