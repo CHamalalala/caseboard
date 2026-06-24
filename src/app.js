@@ -110,8 +110,9 @@ function editable(tag, value, onsave, cls = '') {
   n.addEventListener('click', (e) => e.stopPropagation());        // redigér uden at toggle/markere
   return n;
 }
-const fileInput = (label) => el('label', { class: 'btn ghost file' }, label,
-  el('input', { type: 'file', accept: '.json', style: 'display:none', onchange: (e) => e.target.files[0] && importCase(e.target.files[0]) }));
+// "Åbn sag" — vælg en sagsfil (ordet JSON nævnes ikke for brugeren).
+const openSagBtn = (label) => el('label', { class: 'btn ghost file' }, label,
+  el('input', { type: 'file', accept: '.json,.caseboard,application/json', style: 'display:none', onchange: (e) => e.target.files[0] && importCase(e.target.files[0]) }));
 
 // ---------- HJEM (Mine sager) ----------
 function caseCard(c) {
@@ -129,18 +130,27 @@ function renderHome() {
   const header = el('header', { class: 'topbar' },
     el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, '⚖️ CaseBoard'),
     el('div', { class: 'casetitle' }, 'Mine sager'),
-    el('div', { class: 'tools' }, el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), fileInput('⤒ Importér sag')));
+    el('div', { class: 'tools' }, el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), openSagBtn('📂 Åbn sag')));
   const body = el('div', { class: 'home' });
   if (!state.cases.length) {
     body.append(el('div', { class: 'empty' },
-      el('h2', {}, 'Velkommen til CaseBoard'),
-      el('p', {}, 'Et 100% privat værktøj til at føre dine sager. Alt gemmes lokalt på din maskine — intet forlader computeren.'),
-      el('div', { class: 'tools center' }, el('button', { class: 'btn primary', onclick: createCase }, 'Start ny sag'),
-        el('button', { class: 'btn', onclick: loadDemo }, 'Indlæs demo (fiktiv)'), fileInput('Importér sag (.json)'))));
+      el('h2', {}, 'Mine sager'),
+      el('p', { class: 'big' }, 'Du har ingen sager endnu.'),
+      el('p', {}, 'En sag samler hele forløbet ét sted: tidslinje, bilag og dine opsummeringer. Alt gemmes lokalt på din computer — intet sendes nogen steder.'),
+      el('div', { class: 'tools center' },
+        el('button', { class: 'btn primary', onclick: createCase }, '➕ Opret ny sag'),
+        openSagBtn('📂 Åbn en sag'),
+        el('button', { class: 'btn', onclick: loadDemo }, '✨ Se et eksempel')),
+      el('div', { class: 'dropnote' }, '⤓ … eller træk en sagsfil ind her'),
+      el('p', { class: 'hint muted' }, '“Åbn en sag” henter en sagsfil du har gemt eller fået tilsendt.')));
   } else {
     body.append(el('div', { class: 'casegrid' }, ...state.cases.sort((a, b) => (b.updated || 0) - (a.updated || 0)).map(caseCard),
       el('div', { class: 'casecard add', onclick: createCase }, el('div', { class: 'plus' }, '＋'), el('div', {}, 'Ny sag'))));
   }
+  // træk-en-sagsfil-ind (forstås nemmere end en fil-dialog)
+  body.addEventListener('dragover', (e) => { e.preventDefault(); body.classList.add('drop-active'); });
+  body.addEventListener('dragleave', (e) => { if (e.target === body) body.classList.remove('drop-active'); });
+  body.addEventListener('drop', (e) => { e.preventDefault(); body.classList.remove('drop-active'); const f = e.dataTransfer.files[0]; if (f) importCase(f); });
   root().replaceChildren(header, body);
 }
 
@@ -252,7 +262,7 @@ function renderCase() {
     el('div', { class: 'tools' },
       el('button', { class: 'btn primary', onclick: addEventFromModal }, '➕ Indsæt bilag'),
       el('button', { class: 'btn', onclick: () => { addSummary(); } }, '＋ Opsummering'),
-      el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c) }, '⤓ Eksportér sag')));
+      el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil (backup / send til en kollega)' }, '💾 Gem sag som fil')));
 
   const evs = sortEvents(c.events);
   const timeline = el('main', { class: 'timeline' },

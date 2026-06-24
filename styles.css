@@ -17,7 +17,11 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;color:var(--ink);backgroun
 h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .muted{color:#8a93a6;font-style:italic;font-size:13px}
 .empty{grid-column:1/-1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:30px;text-align:center}
-.empty h2{font-size:20px;color:var(--navy)}
+.empty h2{font-size:22px;color:var(--navy)}
+.empty .big{font-size:16px;font-weight:600;color:#33508a;margin:4px 0}
+.empty .hint{margin-top:10px;font-size:12px}
+.dropnote{margin:16px auto 0;max-width:360px;border:2px dashed #c3cee2;border-radius:10px;padding:14px;color:#7d8aa3;font-size:13px}
+.home.drop-active,.drop-active .dropnote{border-color:#2e7d32;background:#f3faf3;color:#2e7d32}
 /* Hjem / Mine sager */
 .home{max-width:1100px;margin:22px auto;padding:0 16px}
 .casegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
