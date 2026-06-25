@@ -46,7 +46,7 @@ const content = (s) => words(s).filter((w) => !STOP.has(w) && w.length > 2);
 // jura-vigtige signaler (dansk): datoer, beløb, frist-/forpligtelses-ord, egennavne midt i sætning
 const DATE_RE = /\b\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}\b|\b\d{1,2}\.?\s*(jan|feb|mar|apr|maj|jun|jul|aug|sep|okt|nov|dec)/i;
 const MONEY_RE = /\b\d[\d.\s]*\s*(kr|kroner|dkk)\b|\bkr\.?\s*\d|\d\s*%/i;
-const LEGAL_RE = /\b(frist|senest|inden|anke|påkrav|forpligt\w*|skal|aftal\w*|betinget|accept\w*|mislighold\w*|ophæv\w*|erstatning|krav|underskr\w*|opsig\w*|tinglys\w*|sameje)\b/i;
+const LEGAL_RE = /\b(frist|senest|inden|anke|påkrav|forpligt\w*|aftal\w*|betinget|accept\w*|mislighold\w*|ophæv\w*|erstatning|krav|underskr\w*|opsig\w*|tinglys\w*|sameje)\b/i;   // "skal" fjernet (for hyppig → udvander signalet, GLM)
 const PROPER_RE = /[a-zæøå),.]\s+[A-ZÆØÅ][a-zæøåA-ZÆØÅ]{2,}/;   // Stort-bogstavsord EFTER et småt ord = navn/egennavn
 
 function juraBoost(s) {
@@ -76,7 +76,7 @@ function rank(units) {
     let sc = 0; for (const w in tf) sc += tf[w] * idf(w);
     sc = sc / Math.sqrt(ws.length || 1);
     // 3) positions-vægt (tidlige + sidste sætning = ofte konklusion) + 4) jura-boost
-    const pos = i === 0 ? 1.25 : i === 1 ? 1.12 : i === N - 1 ? 1.08 : 1;
+    const pos = i === 0 ? 1.15 : i === 1 ? 1.08 : i === N - 1 ? 1.05 : 1;   // mild prior (base-score = TF-IDF+jura dominerer; GLM)
     return { s, i, score: sc * juraBoost(s) * pos };
   });
 }

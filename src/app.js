@@ -315,7 +315,7 @@ function previewInto(box, att) {
       box.append(ifr);
       // "Vis billeder": opt-in genindlæsning uden billed-blokering (default-CSP blokerer eksterne billeder/tracking-pixels)
       const imgBtn = el('button', { class: 'btn ghost sm', style: 'margin-top:6px', onclick: async () => {
-        try { const t = await rec.blob.text(); ifr.src = blobUrl(new Blob([t.replace(/img-src[^;"']*/i, 'img-src https: data: blob:')], { type: 'text/html' })); imgBtn.remove(); } catch (e) { fail(e); }
+        try { const t = await rec.blob.text(); const relaxed = /img-src/i.test(t) ? t.replace(/img-src[^;]*/i, 'img-src https: data: blob:') : t.replace(/(default-src[^;]*;)/i, "$1 img-src https: data: blob:;"); ifr.src = blobUrl(new Blob([relaxed], { type: 'text/html' })); imgBtn.remove(); } catch (e) { fail(e); }
       } }, '🖼 Vis billeder');
       box.append(imgBtn);
     }
@@ -912,7 +912,8 @@ async function applyMailOpts(c, opts) {
     const mailAddr = (opts.person.match(/[\w.+-]+@[\w.-]+\.\w+/) || [''])[0];
     const name = opts.person.replace(/<[^>]+>/g, '').replace(/[\w.+-]+@[\w.-]+\.\w+/, '').trim() || mailAddr || opts.person.trim();
     const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, '');
-    const dupe = c.people.some((p) => norm(p.name) === norm(name) || (mailAddr && (p.note || '').includes(mailAddr)));
+    // dedup PRIMÆRT på email (to forskellige "Peter Nielsen" må begge med); kun navn når ingen email (GLM)
+    const dupe = mailAddr ? c.people.some((p) => (p.note || '').includes(mailAddr)) : c.people.some((p) => norm(p.name) === norm(name));
     if (!dupe) { const p = newPerson(name); p.note = mailAddr; c.people.unshift(p); added.push('afsender → Personer'); }
   }
   if (opts.deadline && opts.deadline.date) {
