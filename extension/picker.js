@@ -179,4 +179,25 @@
   }
 
   window.__cbPicker = { open };
+
+  // D1: hent mailens bilag som blobs (kører i mail-sidens kontekst → same-origin + brugerens session).
+  // Returnerer [{name,mime,dataUrl}] for hentede + {name,missing/tooBig} for dem vi ikke kunne tage med.
+  async function fetchAll(atts) {
+    const MAX_FILE = 9 * 1024 * 1024, MAX_TOTAL = 20 * 1024 * 1024;
+    const out = []; let total = 0;
+    for (const a of (atts || [])) {
+      if (!a || !a.url) { out.push({ name: a && a.name, mime: a && a.mime, missing: true }); continue; }
+      try {
+        const resp = await fetch(a.url, { credentials: 'include' });
+        if (!resp.ok) { out.push({ name: a.name, mime: a.mime, missing: true }); continue; }
+        const blob = await resp.blob();
+        if (blob.size > MAX_FILE || total + blob.size > MAX_TOTAL) { out.push({ name: a.name, mime: a.mime, tooBig: true }); continue; }
+        total += blob.size;
+        const dataUrl = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(blob); });
+        if (dataUrl) out.push({ name: a.name, mime: a.mime || blob.type, dataUrl }); else out.push({ name: a.name, mime: a.mime, missing: true });
+      } catch (e) { out.push({ name: a.name, mime: a.mime, missing: true }); }
+    }
+    return out;
+  }
+  window.__cbFiles = { fetchAll };
 })();

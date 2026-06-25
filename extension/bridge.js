@@ -16,7 +16,7 @@
       const item = all[k];
       if (!item || !item.email) { chrome.storage.local.remove(k); continue; }
       inflight.add(k);
-      window.postMessage({ type: 'caseboard-mail', nonce, qid: item.id, email: item.email, targets: item.targets, opts: item.opts }, location.origin);
+      window.postMessage({ type: 'caseboard-mail', nonce, qid: item.id, email: item.email, targets: item.targets, opts: item.opts, files: item.files }, location.origin);
     }
   }
 

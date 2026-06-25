@@ -53,14 +53,27 @@
     btn.addEventListener('click', async (e) => {
       e.stopPropagation(); e.preventDefault();
       const email = scrape();
+      const atts = scrapeAttachments();        // mailens bilag (metadata) — fanget mens DOM'en er åben
       // interaktiv popup DIREKTE i mailen: vælg sag(er), redigér, søg — ingen fane-skift
       const r = window.__cbPicker ? await window.__cbPicker.open(email) : { targets: null, email };
       if (!r) return;                          // annulleret
-      chrome.runtime.sendMessage({ type: 'add-mail', email: r.email, targets: r.targets, opts: r.opts }, () => {});
+      let files = [];
+      if (atts.length && window.__cbFiles) { btn.textContent = '⏳ Henter bilag…'; files = await window.__cbFiles.fetchAll(atts); }
+      chrome.runtime.sendMessage({ type: 'add-mail', email: r.email, targets: r.targets, opts: r.opts, files }, () => {});
       btn.textContent = '⏳ Tilføjer…';
       setTimeout(() => { btn.textContent = '📎 Tilføj til sag'; }, 2600);
     });
     subj.appendChild(btn);   // ØVERST — lige efter emnet
+  }
+  // D1: Gmail eksponerer bilag via [download_url]="mime:navn:url" (same-origin → kan hentes med session)
+  function scrapeAttachments() {
+    const out = [], seen = new Set();
+    const main = document.querySelector('div[role="main"]') || document;
+    for (const el of main.querySelectorAll('[download_url]')) {
+      const m = (el.getAttribute('download_url') || '').match(/^([^:]+):([^:]+):(.+)$/);
+      if (m && !seen.has(m[3])) { seen.add(m[3]); out.push({ mime: m[1], name: m[2], url: m[3] }); }
+    }
+    return out;
   }
 
   // bekræftelse tilbage fra CaseBoard (skrevet af bridge.js) → vis på knappen, ingen fane-skift

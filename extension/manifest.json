@@ -3,7 +3,7 @@
   "name": "CaseBoard — Tilføj til sag",
   "version": "1.0.0",
   "description": "Tilføj en e-mail direkte til en sag i CaseBoard — uden screenshots. Data sendes kun til din lokale CaseBoard.",
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "unlimitedStorage"],
   "host_permissions": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*", "https://chamalalala.github.io/*"],
   "background": { "service_worker": "background.js" },
   "content_scripts": [

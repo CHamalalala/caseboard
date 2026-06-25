@@ -941,13 +941,37 @@ async function applyMailOpts(c, opts) {
   if (added.length) { c.updated = Date.now(); await db.saveCaseRec(c); }
   return added;
 }
-function receiveMail(mail, targets, qid, opts) { _mailQueue = _mailQueue.then(() => receiveMailNow(mail, targets, qid, opts)).catch((e) => { fail(e); ackMail(qid, false, []); }); return _mailQueue; }
-async function receiveMailNow(mail, targets, qid, opts) {
+// D1: gem mailens hentede bilag som DOKUMENT-begivenheder (egen tidslinje-card + preview + søgbar). U-hentede → navne noteres.
+async function addFilesToCase(c, files, mail, mailEv) {
+  let added = 0; const noted = [];
+  for (const f of (files || [])) {
+    if (f && f.dataUrl) {
+      try {
+        const blob = await (await fetch(f.dataUrl)).blob();
+        const fileId = uid('file');
+        await db.putFile(fileId, { name: f.name || 'bilag', mime: f.mime || blob.type, blob, text: f.name || '' });
+        c.events.push(newEvent({ date: mail.date || today(), time: mail.time || '', title: f.name || 'Bilag', type: 'dokument', parties: mail.from || '', body: 'Bilag fra mail: ' + (mail.subject || ''), attachments: [{ fileId, name: f.name || 'bilag', mime: f.mime || blob.type }] }));
+        added++;
+      } catch (e) { if (f.name) noted.push(f.name); }
+    } else if (f && f.name) { noted.push(f.name); }   // ikke hentbar (Outlook/CORS/for stor) → notér navnet på mailen
+  }
+  if (noted.length && mailEv) mailEv.body = (mailEv.body ? mailEv.body + '\n' : '') + '📎 Bilag (åbn mailen for at hente): ' + noted.join(', ');
+  return { added, noted: noted.length };
+}
+function receiveMail(mail, targets, qid, opts, files) { _mailQueue = _mailQueue.then(() => receiveMailNow(mail, targets, qid, opts, files)).catch((e) => { fail(e); ackMail(qid, false, []); }); return _mailQueue; }
+async function receiveMailNow(mail, targets, qid, opts, files) {
   if (qid && _doneQids.has(qid)) { ackMail(qid, true, []); return; }   // allerede behandlet (gen-flush) → kvittér igen, ingen dublet
   await refreshCases();
   const hasTargets = targets && ((Array.isArray(targets.caseIds) && targets.caseIds.length) || targets.newCase);
   const names = []; const extras = new Set(); let lastCase = null, lastEv = null;
-  const addTo = async (c) => { lastEv = await addMailEventTo(c, mail); lastCase = c; names.push(c.title || 'sag'); for (const x of await applyMailOpts(c, opts)) extras.add(x); };
+  const addTo = async (c) => {
+    lastEv = await addMailEventTo(c, mail); lastCase = c; names.push(c.title || 'sag');
+    for (const x of await applyMailOpts(c, opts)) extras.add(x);
+    const fr = await addFilesToCase(c, files, mail, lastEv);
+    if (fr.added) extras.add(fr.added + ' bilag');
+    if (fr.noted) extras.add(fr.noted + ' bilag-navne');
+    if (fr.added || fr.noted) { c.updated = Date.now(); await db.saveCaseRec(c); }
+  };
   if (hasTargets) {
     for (const id of (targets.caseIds || [])) { const c = await db.getCase(id); if (c) await addTo(c); }
     if (targets.newCase) await addTo(newCase((mail.subject || 'Ny sag').slice(0, 60)));
@@ -976,7 +1000,7 @@ function setupMailReceiver() {
     const d = e.data;
     if (!d || d.nonce !== MAIL_NONCE) return;
     if (d.type === 'caseboard-getcases') { publishCases(); return; }            // bridge beder om sags-listen
-    if (d.type === 'caseboard-mail' && d.email) receiveMail(d.email, d.targets, d.qid, d.opts);
+    if (d.type === 'caseboard-mail' && d.email) receiveMail(d.email, d.targets, d.qid, d.opts, d.files);
   });
 }
 
