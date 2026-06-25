@@ -201,3 +201,10 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .sectionbody .layout{position:relative}
 .connectors .conn{fill:none;stroke:#e08a00;stroke-width:2.5;stroke-dasharray:5 4;opacity:.85}
 .connectors .conndot{fill:#e08a00;stroke:#fff;stroke-width:1.5}
+/* ===== v4 Fase E: ghost-kontrast på lys baggrund, read-only, edit-toggle ===== */
+.casehead .btn.ghost{background:#fff;border:1px solid #b6c2da;color:#2b4a82}
+.casehead .btn.ghost:hover{background:#eef2fa;border-color:#8ea3c9}
+.btn.editon{background:#a3360b;color:#fff}
+.btn.editon:hover{filter:brightness(1.08)}
+.ro{cursor:default}
+body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}

@@ -15,6 +15,7 @@ const state = {
   openCaseObjs: {}, openOrder: [], activeCaseId: null, tab: 'overblik',  // faner: åbne sager + sektion
   expanded: new Set(), selEvent: null, selSummary: null,
   tlFilter: { types: new Set(), tags: new Set() },   // filtre på tidslinjen
+  editMode: false,                                    // tidslinje-tekst er read-only indtil dette slås til
 };
 const resetView = () => { state.expanded = new Set(); state.selEvent = state.selSummary = null; state.tlFilter = { types: new Set(), tags: new Set() }; };
 const SECTIONS = [
@@ -179,7 +180,9 @@ async function loadDemo() {
 }
 
 // ---------- gen-brugte DOM-stykker ----------
-function editable(tag, value, onsave, cls = '') {
+// lock=true → feltet er KUN redigerbart når state.editMode er slået til (tidslinje-tekst).
+function editable(tag, value, onsave, cls = '', lock = false) {
+  if (lock && !state.editMode) return el(tag, { class: cls + ' ro' }, value || '');   // ren tekst, klik propagerer
   const n = el(tag, { class: 'edit ' + cls, contenteditable: 'true' }, value || '');
   n.addEventListener('blur', () => onsave(n.textContent.trim()));
   n.addEventListener('click', (e) => e.stopPropagation());        // redigér uden at toggle/markere
@@ -202,6 +205,7 @@ function caseCard(c) {
 }
 function renderHome() {
   revokeUrls();
+  document.body.classList.remove('editing');     // GLM-review: editing-state må ikke hænge ved på hjem
   const header = el('header', { class: 'topbar' },
     el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, '⚖️ CaseBoard'),
     el('div', { class: 'casetitle' }, 'Mine sager'),
@@ -226,7 +230,8 @@ function renderHome() {
   body.addEventListener('dragover', (e) => { e.preventDefault(); body.classList.add('drop-active'); });
   body.addEventListener('dragleave', (e) => { if (e.target === body) body.classList.remove('drop-active'); });
   body.addEventListener('drop', (e) => { e.preventDefault(); body.classList.remove('drop-active'); const f = e.dataTransfer.files[0]; if (f) importCase(f); });
-  root().replaceChildren(header, body);
+  // permanent fane-strip: åbne sager forsvinder ALDRIG når man går hjem
+  root().replaceChildren(...(state.openOrder.length ? [header, casetabsStrip(), body] : [header, body]));
 }
 
 // ---------- "+ Tilføj til opsummering"-popover ----------
@@ -269,7 +274,7 @@ function eventCard(ev) {
     el('span', { class: 'caret', onclick: (e) => { e.stopPropagation(); open ? state.expanded.delete(ev.id) : state.expanded.add(ev.id); renderCase(); } }, open ? '▾' : '▸'),
     el('span', { class: 'date' }, daDate(ev.date)),
     el('span', { class: 'ficon' }, att ? kindIcon(kind) : '•'),
-    editable('span', ev.title, (v) => patch(ev, 'title', v), 'title'),
+    editable('span', ev.title, (v) => patch(ev, 'title', v), 'title', true),
     el('button', { class: 'plus-btn', title: 'Føj til opsummering', onclick: (e) => { e.stopPropagation(); summaryPopover(e.currentTarget, ev); } }, '＋'),
     el('button', { class: 'mini del', title: 'Slet', onclick: (e) => { e.stopPropagation(); state.case.events = state.case.events.filter((x) => x.id !== ev.id); save(); renderCase(); } }, '✕'));
 
@@ -289,7 +294,7 @@ function eventCard(ev) {
     }
     if (ev.parties) body.append(el('div', { class: 'parties' }, ev.parties));
     body.append(el('div', { class: 'note-label muted' }, 'Note (din — dokumentet kan ikke ændres):'),
-      editable('div', ev.body, (v) => patch(ev, 'body', v), 'body'));
+      editable('div', ev.body, (v) => patch(ev, 'body', v), 'body', true));
     // etiketter
     ev.tags = ev.tags || [];
     body.append(el('div', { class: 'tagsrow' }, el('span', { class: 'muted sm' }, '🏷'),
@@ -340,10 +345,10 @@ function summaryCard(su) {
 
 function casetabsStrip() {
   return el('div', { class: 'casetabs' },
-    el('div', { class: 'casetab homebtn', title: 'Mine sager', onclick: navHome }, '🏠'),
+    el('div', { class: 'casetab homebtn' + (state.view === 'home' ? ' active' : ''), title: 'Mine sager', onclick: navHome }, '🏠 Hjem'),
     ...state.openOrder.map((id) => {
-      const co = state.openCaseObjs[id]; const active = id === state.activeCaseId;
-      return el('div', { class: 'casetab' + (active ? ' active' : ''), onclick: () => switchCase(id) },
+      const co = state.openCaseObjs[id]; const active = state.view === 'case' && id === state.activeCaseId;
+      return el('div', { class: 'casetab' + (active ? ' active' : ''), onclick: () => switchCase(id), title: 'Skift til ' + (co?.title || 'sag') },
         el('span', { class: 't' }, co?.title || 'Sag'),
         el('span', { class: 'close', title: 'Luk fane', onclick: (e) => { e.stopPropagation(); closeCase(id); } }, '✕'));
     }));
@@ -352,13 +357,15 @@ function casetabsStrip() {
 function renderCase() {
   revokeUrls();
   const c = state.case;
+  document.body.classList.toggle('editing', !!state.editMode);
   const topbar = el('header', { class: 'topbar' },
     el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, '⚖️ CaseBoard'),
     el('div', { class: 'tools' }, el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), openSagBtn('📂 Åbn sag')));
 
   const casehead = el('div', { class: 'casehead' },
-    editable('div', c.title, (v) => patch(c, 'title', v), 'headtitle'),
+    editable('div', c.title, (v) => patch(c, 'title', v), 'headtitle', true),
     el('div', { class: 'tools' },
+      el('button', { class: 'btn ' + (state.editMode ? 'editon' : 'ghost'), role: 'switch', 'aria-pressed': state.editMode ? 'true' : 'false', 'aria-label': 'Redigeringstilstand', onclick: () => { state.editMode = !state.editMode; renderCase(); }, title: state.editMode ? 'Lås teksten (read-only)' : 'Lås op for at redigere tekst' }, state.editMode ? '🔓 Redigerer' : '✏️ Redigér'),
       el('button', { class: 'btn primary', onclick: addEventFromModal }, '➕ Indsæt bilag'),
       el('button', { class: 'btn', onclick: () => { state.tab = 'tidslinje'; addSummary(); } }, '＋ Opsummering'),
       el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil (til backup / gen-import)' }, '💾 Gem sag'),
