@@ -40,14 +40,44 @@ const BOILER = [
 ];
 const isBoiler = (s) => { const t = s.trim(); return t.length < 18 || t.length > 600 || BOILER.some((r) => r.test(t)); };
 
+// indholdsord (uden stopord/korte ord) → grundlag for både scoring og dedup
+const content = (s) => words(s).filter((w) => !STOP.has(w) && w.length > 2);
+
+// jura-vigtige signaler (dansk): datoer, beløb, frist-/forpligtelses-ord, egennavne midt i sætning
+const DATE_RE = /\b\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}\b|\b\d{1,2}\.?\s*(jan|feb|mar|apr|maj|jun|jul|aug|sep|okt|nov|dec)/i;
+const MONEY_RE = /\b\d[\d.\s]*\s*(kr|kroner|dkk)\b|\bkr\.?\s*\d|\d\s*%/i;
+const LEGAL_RE = /\b(frist|senest|inden|anke|påkrav|forpligt\w*|skal|aftal\w*|betinget|accept\w*|mislighold\w*|ophæv\w*|erstatning|krav|underskr\w*|opsig\w*|tinglys\w*|sameje)\b/i;
+const PROPER_RE = /[a-zæøå),.]\s+[A-ZÆØÅ][a-zæøåA-ZÆØÅ]{2,}/;   // Stort-bogstavsord EFTER et småt ord = navn/egennavn
+
+function juraBoost(s) {
+  let b = 1;
+  if (DATE_RE.test(s)) b += 0.5;
+  if (MONEY_RE.test(s)) b += 0.5;
+  if (LEGAL_RE.test(s)) b += 0.4;
+  if (PROPER_RE.test(s)) b += 0.2;
+  return b;
+}
+
+// Jaccard-lighed mellem to token-sæt → fjern nær-dubletter (mere robust end "første 60 tegn")
+function jaccard(a, b) { if (!a.size || !b.size) return 0; let inter = 0; for (const x of a) if (b.has(x)) inter++; return inter / (a.size + b.size - inter); }
+
 function rank(units) {
-  const seen = new Set();
-  const uniq = units.filter((u) => { const k = u.toLowerCase().slice(0, 60); if (seen.has(k)) return false; seen.add(k); return true; });
-  const freq = {};
-  for (const s of uniq) for (const w of words(s)) if (!STOP.has(w) && w.length > 2) freq[w] = (freq[w] || 0) + 1;
-  return uniq.map((s, i) => {
-    const ws = words(s).filter((w) => !STOP.has(w) && w.length > 2);
-    return { s, i, score: ws.reduce((a, w) => a + (freq[w] || 0), 0) / Math.sqrt(ws.length || 1) };
+  // 1) dedup: drop sætninger der ligner en allerede beholdt (Jaccard > 0.6)
+  const kept = [], sets = [];
+  for (const u of units) { const set = new Set(content(u)); if (sets.some((s) => jaccard(set, s) > 0.6)) continue; kept.push(u); sets.push(set); }
+  const N = kept.length || 1;
+  // 2) TF-IDF: ord der står i MANGE sætninger vægtes ned (idf), distinktive nøgleord op
+  const df = {};
+  for (const set of sets) for (const w of set) df[w] = (df[w] || 0) + 1;
+  const idf = (w) => Math.log((N + 1) / ((df[w] || 0) + 0.5));
+  return kept.map((s, i) => {
+    const ws = content(s); const tf = {};
+    for (const w of ws) tf[w] = (tf[w] || 0) + 1;
+    let sc = 0; for (const w in tf) sc += tf[w] * idf(w);
+    sc = sc / Math.sqrt(ws.length || 1);
+    // 3) positions-vægt (tidlige + sidste sætning = ofte konklusion) + 4) jura-boost
+    const pos = i === 0 ? 1.25 : i === 1 ? 1.12 : i === N - 1 ? 1.08 : 1;
+    return { s, i, score: sc * juraBoost(s) * pos };
   });
 }
 const shorten = (s, max = 260) => (s.length > max ? s.slice(0, max).replace(/\s\S*$/, '') + '…' : s);

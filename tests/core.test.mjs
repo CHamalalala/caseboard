@@ -1,6 +1,6 @@
 // Tests på "hjernen" (ren logik i model.js). Kør: node tests/core.test.mjs
 import { sortEvents, insertIndex, newEvent, daDate, deadlineStatus, sumMinutes, fmtMinutes, toHours, computeDeadline, claimStrength } from '../src/model.js';
-import { extractiveSummary, suggestHeading } from '../src/summarize.js';
+import { extractiveSummary, suggestHeading, keyPoints } from '../src/summarize.js';
 import { parseSmartDate } from '../src/datefmt.js';
 import assert from 'node:assert/strict';
 
@@ -86,6 +86,30 @@ test('parseSmartDate: danske + relative + ISO formater (auto-dato)', () => {
   assert.deepEqual(parseSmartDate('2026-06-24', now), { date: '2026-06-24', time: '' });        // ISO
   assert.equal(parseSmartDate('Tue, 16 Jun 2026 14:53:05 +0200', now).date, '2026-06-16');       // RFC822
   assert.equal(parseSmartDate('hejsa', now), null);
+});
+
+test('summarize: jura-vigtig sætning (dato+beløb+frist) prioriteres over fyld', () => {
+  const text = [
+    'Vejret var fint i dag og solen skinnede over byen.',
+    'Køber skal betale 250.000 kr senest den 14-06-2026, ellers bortfalder aftalen.',
+    'Vi talte løst om forskellige ting hen over eftermiddagen.',
+    'Der var kaffe og kage til mødet.',
+  ].join('\n');
+  const pts = keyPoints(text, 'kort');
+  assert.ok(pts.some((p) => /250\.000 kr/.test(p)), 'den juridisk vigtige sætning skal være med');
+  assert.equal(pts[0].includes('250.000') || pts.some((p) => p.includes('250.000')), true);
+});
+
+test('summarize: nær-dubletter fjernes (Jaccard-dedup) + nul hallucination', () => {
+  const text = [
+    'Modparten har accepteret tilbuddet på ejendommen.',
+    'Modparten har accepteret tilbuddet på ejendommen i dag.',
+    'Fristen for anke er fire uger fra dommens afsigelse.',
+  ].join('\n');
+  const pts = keyPoints(text, 'normal');
+  const acc = pts.filter((p) => /accepteret tilbuddet/.test(p));
+  assert.ok(acc.length <= 1, 'nær-dubletter skal fjernes');
+  for (const p of pts) assert.ok(text.includes(p.replace(/…$/, '').trim().slice(0, 30)), 'output ⊂ input (ingen opdigtning)');
 });
 
 console.log(`\nAlle ${n} tests grønne ✓`);

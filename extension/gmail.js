@@ -56,7 +56,7 @@
       // interaktiv popup DIREKTE i mailen: vælg sag(er), redigér, søg — ingen fane-skift
       const r = window.__cbPicker ? await window.__cbPicker.open(email) : { targets: null, email };
       if (!r) return;                          // annulleret
-      chrome.runtime.sendMessage({ type: 'add-mail', email: r.email, targets: r.targets }, () => {});
+      chrome.runtime.sendMessage({ type: 'add-mail', email: r.email, targets: r.targets, opts: r.opts }, () => {});
       btn.textContent = '⏳ Tilføjer…';
       setTimeout(() => { btn.textContent = '📎 Tilføj til sag'; }, 2600);
     });

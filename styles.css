@@ -70,7 +70,8 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .mini-btn{background:none;border:1px solid #cdd8ef;color:#33508a;border-radius:5px;padding:3px 9px;font-size:12px;cursor:pointer}
 .card.fane{padding:0;overflow:hidden}
 .fane-head{display:flex;align-items:center;gap:8px;padding:9px 11px;cursor:pointer;user-select:none}
-.fane-head .caret{color:#8a93a6;cursor:pointer;width:14px;flex:0 0 auto}
+.fane-head .caret{color:#5b6678;cursor:pointer;flex:0 0 auto;font-size:20px;line-height:1;width:26px;text-align:center;padding:2px 0;border-radius:6px;transition:background .12s}
+.fane-head .caret:hover{background:#e7ebf3;color:#14213d}
 .fane-head .ficon{flex:0 0 auto}
 .fane-head .title{flex:1;font-weight:600}
 .card.ev.selected{border-left-width:6px;box-shadow:0 0 0 2px #ffd27a}

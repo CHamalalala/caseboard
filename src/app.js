@@ -310,7 +310,15 @@ function previewInto(box, att) {
     if (kind === 'image') box.append(el('img', { class: 'pv-img', src: url }));
     else if (kind === 'pdf') box.append(el('iframe', { class: 'pv-pdf', src: url + '#toolbar=0&view=FitH' }));
     // mail (gemt .html): vis INLINE i sandboxed iframe (mailHtml er saniteret; sandbox='' = ingen scripts) → indholdet ses automatisk
-    else if (kind === 'mail') box.append(el('iframe', { class: 'pv-mail', src: url, sandbox: '' }));
+    else if (kind === 'mail') {
+      const ifr = el('iframe', { class: 'pv-mail', src: url, sandbox: '' });
+      box.append(ifr);
+      // "Vis billeder": opt-in genindlæsning uden billed-blokering (default-CSP blokerer eksterne billeder/tracking-pixels)
+      const imgBtn = el('button', { class: 'btn ghost sm', style: 'margin-top:6px', onclick: async () => {
+        try { const t = await rec.blob.text(); ifr.src = blobUrl(new Blob([t.replace(/img-src[^;"']*/i, 'img-src https: data: blob:')], { type: 'text/html' })); imgBtn.remove(); } catch (e) { fail(e); }
+      } }, '🖼 Vis billeder');
+      box.append(imgBtn);
+    }
     else if (kind === 'text') box.append(el('pre', { class: 'pv-text' }, rec.text || ''));
     else box.append(el('div', { class: 'pv-doc' }, el('div', { class: 'pv-ico' }, kindIcon(kind)), el('div', {}, att.name), el('div', { class: 'muted' }, 'Forhåndsvisning ikke muligt for denne type — åbn originalen')));
   }).catch(fail);
@@ -895,21 +903,41 @@ function ackMail(qid, ok, titles) { try { window.postMessage({ type: 'caseboard-
 // GLM-review: SERIALISÉR (kø) så to mails ikke racer (lost-update) eller stabler to modaller. Dedup på qid (idempotent ved gen-flush).
 let _mailQueue = Promise.resolve();
 const _doneQids = new Set();
-function receiveMail(mail, targets, qid) { _mailQueue = _mailQueue.then(() => receiveMailNow(mail, targets, qid)).catch((e) => { fail(e); ackMail(qid, false, []); }); return _mailQueue; }
-async function receiveMailNow(mail, targets, qid) {
+// D2/D3: anvend popup-valg på en sag — afsender → Personer (dedup) + opdaget frist → Frister. Returnerer hvad der blev tilføjet.
+async function applyMailOpts(c, opts) {
+  if (!opts) return [];
+  const added = [];
+  if (opts.addPerson && opts.person) {
+    c.people = c.people || [];
+    const mailAddr = (opts.person.match(/[\w.+-]+@[\w.-]+\.\w+/) || [''])[0];
+    const name = opts.person.replace(/<[^>]+>/g, '').replace(/[\w.+-]+@[\w.-]+\.\w+/, '').trim() || mailAddr || opts.person.trim();
+    const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, '');
+    const dupe = c.people.some((p) => norm(p.name) === norm(name) || (mailAddr && (p.note || '').includes(mailAddr)));
+    if (!dupe) { const p = newPerson(name); p.note = mailAddr; c.people.unshift(p); added.push('afsender → Personer'); }
+  }
+  if (opts.deadline && opts.deadline.date) {
+    c.deadlines = c.deadlines || [];
+    if (!c.deadlines.some((d) => d.date === opts.deadline.date && d.title === opts.deadline.title)) { c.deadlines.unshift(newDeadline({ date: opts.deadline.date, title: opts.deadline.title })); added.push('frist'); }
+  }
+  if (added.length) { c.updated = Date.now(); await db.saveCaseRec(c); }
+  return added;
+}
+function receiveMail(mail, targets, qid, opts) { _mailQueue = _mailQueue.then(() => receiveMailNow(mail, targets, qid, opts)).catch((e) => { fail(e); ackMail(qid, false, []); }); return _mailQueue; }
+async function receiveMailNow(mail, targets, qid, opts) {
   if (qid && _doneQids.has(qid)) { ackMail(qid, true, []); return; }   // allerede behandlet (gen-flush) → kvittér igen, ingen dublet
   await refreshCases();
   const hasTargets = targets && ((Array.isArray(targets.caseIds) && targets.caseIds.length) || targets.newCase);
-  const names = []; let lastCase = null, lastEv = null;
+  const names = []; const extras = new Set(); let lastCase = null, lastEv = null;
+  const addTo = async (c) => { lastEv = await addMailEventTo(c, mail); lastCase = c; names.push(c.title || 'sag'); for (const x of await applyMailOpts(c, opts)) extras.add(x); };
   if (hasTargets) {
-    for (const id of (targets.caseIds || [])) { const c = await db.getCase(id); if (c) { lastEv = await addMailEventTo(c, mail); lastCase = c; names.push(c.title || 'sag'); } }
-    if (targets.newCase) { const c = newCase((mail.subject || 'Ny sag').slice(0, 60)); lastEv = await addMailEventTo(c, mail); lastCase = c; names.push(c.title || 'sag'); }
+    for (const id of (targets.caseIds || [])) { const c = await db.getCase(id); if (c) await addTo(c); }
+    if (targets.newCase) await addTo(newCase((mail.subject || 'Ny sag').slice(0, 60)));
   } else {
     const choice = await mailCaseModal(mail, state.cases, state.activeCaseId);
     if (!choice) { ackMail(qid, false, []); return; }
     // 'new': gem først NÅR mailen er tilføjet → ingen tom-sag-orphan ved fejl (GLM #3)
     const c = choice === 'new' ? newCase((mail.subject || 'Ny sag').slice(0, 60)) : await db.getCase(choice);
-    if (c) { lastEv = await addMailEventTo(c, mail); lastCase = c; names.push(c.title || 'sag'); }
+    if (c) await addTo(c);
   }
   if (qid) _doneQids.add(qid);
   if (!lastCase) { ackMail(qid, false, []); return; }   // ingen gyldig sag (fx slettet caseId) → kvittér så køen ryddes
@@ -917,7 +945,7 @@ async function receiveMailNow(mail, targets, qid) {
   openCaseObj(lastCase);
   state.tab = 'tidslinje'; state.expanded = new Set([lastEv.id]); state.selEvent = lastEv.id; state.scrollTo = lastEv.id;
   renderCase();
-  successBanner('✅ Mail tilføjet til ' + names.map((n) => '«' + n + '»').join(', '));
+  successBanner('✅ Mail tilføjet til ' + names.map((n) => '«' + n + '»').join(', ') + (extras.size ? ' (+ ' + [...extras].join(', ') + ')' : ''));
   ackMail(qid, true, names);
 }
 function setupMailReceiver() {
@@ -929,7 +957,7 @@ function setupMailReceiver() {
     const d = e.data;
     if (!d || d.nonce !== MAIL_NONCE) return;
     if (d.type === 'caseboard-getcases') { publishCases(); return; }            // bridge beder om sags-listen
-    if (d.type === 'caseboard-mail' && d.email) receiveMail(d.email, d.targets, d.qid);
+    if (d.type === 'caseboard-mail' && d.email) receiveMail(d.email, d.targets, d.qid, d.opts);
   });
 }
 

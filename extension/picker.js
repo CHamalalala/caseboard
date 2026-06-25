@@ -16,6 +16,23 @@
     catch { return []; }
   }
 
+  // D2: opdag en frist i mailteksten (frist-ord + en konkret dato, ELLER "X dage/uger" relativt). Returnerer {date,title}|null.
+  function detectDeadline(text) {
+    if (!text) return null;
+    const FRIST = /(frist|senest|inden|forfald|betal\w*|underskr\w*|svar\w*|tilbagemeld\w*)/i;
+    const sd = (window.__cbDate || {}).parseSmartDate;
+    const pad = (x) => String(x).padStart(2, '0');
+    for (const seg of text.split(/[\n.;]/)) {
+      if (!FRIST.test(seg) || !sd) continue;
+      // isolér dato-substrings (undgå at beløb som "250.000" forstyrrer parseren) og prøv hver
+      const ms = seg.match(/\b\d{1,2}[-./]\d{1,2}[-./]\d{2,4}\b|\b\d{1,2}\.?\s*(jan|feb|mar|apr|maj|jun|jul|aug|sep|okt|nov|dec)[a-zæøå.]*\s*\d{0,4}/gi) || [];
+      for (const dm of ms) { const d = sd(dm); if (d && d.date) return { date: d.date, title: ('Frist: ' + seg.trim()).slice(0, 60) }; }
+    }
+    const rel = text.match(/(\d{1,2})\s*(dage?|uger?)/i);
+    if (rel && FRIST.test(text)) { const n = +rel[1] * (/uge/i.test(rel[2]) ? 7 : 1); const d = new Date(); d.setDate(d.getDate() + n); return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, title: 'Frist (' + rel[0].trim() + ')' }; }
+    return null;
+  }
+
   const CSS = `
   :host{all:initial}
   .back{position:fixed;inset:0;background:rgba(10,16,32,.55);display:flex;align-items:center;justify-content:center;font-family:"Segoe UI",Arial,sans-serif}
@@ -26,6 +43,7 @@
   .in{width:100%;box-sizing:border-box;border:1px solid #d4d9e3;border-radius:9px;padding:9px 11px;font-size:14px;color:#14213d;background:#fff}
   .in:focus{outline:2px solid #1a7f37;border-color:#1a7f37}
   .ta{min-height:78px;max-height:170px;resize:vertical;font:13px/1.45 "Segoe UI",Arial,sans-serif}
+  .extra{display:flex;flex-direction:column;gap:6px;border:1px solid #eef0f4;border-radius:10px;padding:6px}
   .row2{display:flex;gap:8px}
   .row2 .in{flex:1}
   .search{margin:4px 0 8px}
@@ -66,6 +84,16 @@
       const from = h('input', { class: 'in', value: email.from || '', placeholder: 'Afsender' });
       const bodyArea = h('textarea', { class: 'in ta', rows: '4', placeholder: 'Mailens indhold (følger med i sagen)' });
       bodyArea.value = email.bodyText || '';
+      // D3: afsender → Personer (vises kun hvis vi har en afsender)
+      const hasFrom = !!(email.from && email.from.trim());
+      const personCb = h('input', { type: 'checkbox' }); personCb.checked = hasFrom;
+      const personRow = hasFrom ? h('label', { class: 'opt on' }, personCb, h('div', {}, h('div', { class: 't' }, '➕ Tilføj afsender til Personer'), h('div', { class: 's' }, email.from))) : null;
+      if (personRow) personCb.addEventListener('change', () => personRow.classList.toggle('on', personCb.checked));
+      // D2: auto-opdag frist i mailteksten → forslag
+      const det = detectDeadline(email.bodyText || '');
+      let deadlineCb = null, deadlineRow = null;
+      if (det) { deadlineCb = h('input', { type: 'checkbox' }); deadlineCb.checked = true; deadlineRow = h('label', { class: 'opt on' }, deadlineCb, h('div', {}, h('div', { class: 't' }, '📅 Opret frist'), h('div', { class: 's' }, det.title + ' — ' + det.date))); deadlineCb.addEventListener('change', () => deadlineRow.classList.toggle('on', deadlineCb.checked)); }
+      const extra = (personRow || deadlineRow) ? h('div', { class: 'extra' }, personRow, deadlineRow) : null;
       const search = h('input', { class: 'in search', type: 'search', placeholder: '🔎 Søg i sager…' });
 
       const addBtn = h('button', { class: 'btn add', disabled: 'true' }, 'Tilføj');
@@ -123,7 +151,8 @@
           subject: subj.value.trim() || '(uden emne)', date: date.value || email.date, time: time.value || '', from: from.value.trim(),
           bodyText: bodyArea.value,
         });
-        cleanup({ targets: { caseIds: [...sel], newCase }, email: edited });
+        const opts = { addPerson: !!(personCb.checked && hasFrom), person: from.value.trim() || email.from || '', deadline: (deadlineCb && deadlineCb.checked) ? det : null };
+        cleanup({ targets: { caseIds: [...sel], newCase }, email: edited, opts });
       });
 
       const back = h('div', { class: 'back', onclick: (e) => { if (e.target === back) cleanup(null); } },
@@ -136,6 +165,8 @@
             h('div', { style: 'margin-top:8px' }, from),
             h('div', { class: 'lbl' }, 'Indhold'),
             bodyArea,
+            extra ? h('div', { class: 'lbl' }, 'Tilføj automatisk') : null,
+            extra,
             h('div', { class: 'lbl' }, 'Hvilke sager skal den i?'),
             search, list, newRow,
             h('div', { class: 'muted' }, 'Vælg én eller flere — tilføjes uden at forlade mailen.')),

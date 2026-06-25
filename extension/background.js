@@ -6,7 +6,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'add-mail') return;
   (async () => {
     const id = Date.now() + '-' + Math.random().toString(36).slice(2);
-    await chrome.storage.local.set({ ['q_' + id]: { id, email: msg.email, targets: msg.targets || null, at: Date.now() } });
+    await chrome.storage.local.set({ ['q_' + id]: { id, email: msg.email, targets: msg.targets || null, opts: msg.opts || null, at: Date.now() } });
 
     // sikr en CaseBoard-fane så mailen kan skrives. Med targets (valgt i popup'en) STJÆLER vi IKKE fokus — åbn i baggrunden.
     const tabs = await chrome.tabs.query({ url: 'https://chamalalala.github.io/caseboard/*' });
