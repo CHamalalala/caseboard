@@ -208,7 +208,7 @@ async function importCase(file) { try { await importData(JSON.parse(await file.t
 // router: en .eml-mail → tilføj til tidslinjen; ellers en sags-fil → importér sag
 async function routeDroppedFile(f) {
   if (!f) return;
-  if (/\.eml$/i.test(f.name) || f.type === 'message/rfc822') { try { await addMailToCase(parseEml(await f.text())); } catch (e) { fail(e); } }
+  if (/\.eml$/i.test(f.name) || f.type === 'message/rfc822') { try { await receiveMail(parseEml(await f.text())); } catch (e) { fail(e); } }
   else importCase(f);
 }
 async function loadDemo() {
@@ -833,22 +833,64 @@ function mailHtml(m) {
 <div class="h"><div><b>Fra:</b> ${escHtml(m.from || '')}</div><div><b>Til:</b> ${escHtml(m.to || '')}</div><div><b>Dato:</b> ${escHtml(m.dateText || m.date || '')}</div></div>
 <div>${body}</div></body></html>`;
 }
-async function addMailToCase(mail) {
+// tilføj selve mail-begivenheden til en konkret sag (genbrugt af modtager + .eml-drop)
+async function addMailEventTo(c, mail) {
+  const safe = (mail.subject || 'mail').replace(/[\\/:*?"<>|\n\r]+/g, '-').slice(0, 80);
+  const fileId = uid('file');
+  await db.putFile(fileId, { name: safe + '.html', mime: 'text/html', blob: new Blob([mailHtml(mail)], { type: 'text/html' }), text: (mail.subject || '') + '\n' + (mail.bodyText || '') });
+  const ev = newEvent({ date: mail.date || today(), time: mail.time || '', title: mail.subject || '(mail uden emne)', type: 'mail',
+    parties: [mail.from, mail.to].filter(Boolean).join(' → '), body: (mail.bodyText || '').slice(0, 600),
+    attachments: [{ fileId, name: safe + '.html', mime: 'text/html' }] });
+  c.events.push(ev); c.updated = Date.now(); await db.saveCaseRec(c);
+  return ev;
+}
+const successBanner = (msg) => { const b = el('div', { class: 'success-banner' }, msg); document.body.append(b); setTimeout(() => b.classList.add('show'), 10); setTimeout(() => { b.classList.remove('show'); setTimeout(() => b.remove(), 400); }, 3000); };
+
+// vælger: hvilken sag skal mailen i? (aktiv sag forvalgt). Resolver caseId | 'new' | null.
+function mailCaseModal(mail, cases, activeId) {
+  return new Promise((resolve) => {
+    let chosen = (activeId && cases.some((c) => c.id === activeId)) ? activeId : ((cases[0] && cases[0].id) || 'new');
+    const list = el('div', { class: 'mc-list' });
+    const opt = (id, label, sub) => {
+      const row = el('label', { class: 'mc-opt' + (id === chosen ? ' on' : '') },
+        el('input', id === chosen ? { type: 'radio', name: 'mc', checked: 'checked' } : { type: 'radio', name: 'mc' }),
+        el('div', { class: 'mc-txt' }, el('div', { class: 'mc-title' }, label), sub ? el('div', { class: 'mc-sub muted' }, sub) : null));
+      row.addEventListener('change', () => { chosen = id; [...list.querySelectorAll('.mc-opt')].forEach((x) => x.classList.remove('on')); row.classList.add('on'); });
+      return row;
+    };
+    for (const c of cases) list.append(opt(c.id, c.title || '(uden titel)', `${(c.events || []).length} begivenheder`));
+    list.append(opt('new', '➕ Ny sag fra mailen', 'opretter en ny sag på mailens emne'));
+    const close = (val) => { back.remove(); resolve(val); };
+    const back = el('div', { class: 'modal-back', onclick: (e) => { if (e.target === back) close(null); } },
+      el('div', { class: 'modal' },
+        el('h3', {}, '📧 Tilføj mail til sag'),
+        el('div', { class: 'mc-mail' },
+          el('div', { class: 'mc-subj' }, mail.subject || '(uden emne)'),
+          el('div', { class: 'mc-meta muted' }, [mail.from, (mail.date ? daDate(mail.date) + (mail.time ? ' ' + mail.time : '') : '')].filter(Boolean).join(' · '))),
+        el('div', { class: 'mc-q' }, 'Hvilken sag skal den i?'),
+        list,
+        el('div', { class: 'modal-row' },
+          el('button', { class: 'btn ghost', onclick: () => close(null) }, 'Annullér'),
+          el('button', { class: 'btn primary', onclick: () => close(chosen) }, '➕ Tilføj til sag'))));
+    document.body.append(back);
+  });
+}
+
+// modtag en mail (fra udvidelsen ELLER .eml-drop) → vælg sag → tilføj + synlig bekræftelse
+async function receiveMail(mail) {
   try {
-    if (!state.case) {
-      await refreshCases();
-      if (state.cases[0]) openCaseObj(await db.getCase(state.cases[0].id));
-      else { const c = newCase('Ny sag'); await db.saveCaseRec(c); await refreshCases(); openCaseObj(c); }
-    }
-    const safe = (mail.subject || 'mail').replace(/[\\/:*?"<>|\n\r]+/g, '-').slice(0, 80);
-    const fileId = uid('file');
-    await db.putFile(fileId, { name: safe + '.html', mime: 'text/html', blob: new Blob([mailHtml(mail)], { type: 'text/html' }), text: (mail.subject || '') + '\n' + (mail.bodyText || '') });
-    const ev = newEvent({ date: mail.date || today(), time: mail.time || '', title: mail.subject || '(mail uden emne)', type: 'mail',
-      parties: [mail.from, mail.to].filter(Boolean).join(' → '), body: (mail.bodyText || '').slice(0, 600),
-      attachments: [{ fileId, name: safe + '.html', mime: 'text/html' }] });
-    state.case.events.push(ev); state.expanded = new Set([ev.id]); state.tab = 'tidslinje';
-    await save(); renderCase();
-    toast('📧 Mail tilføjet: ' + (mail.subject || ''), 'ok');
+    await refreshCases();
+    const choice = await mailCaseModal(mail, state.cases, state.activeCaseId);
+    if (!choice) return;
+    let c;
+    if (choice === 'new') { c = newCase((mail.subject || 'Ny sag').slice(0, 60)); await db.saveCaseRec(c); await refreshCases(); }
+    else c = await db.getCase(choice);
+    if (!c) return;
+    const ev = await addMailEventTo(c, mail);
+    openCaseObj(c);
+    state.tab = 'tidslinje'; state.expanded = new Set([ev.id]); state.selEvent = ev.id; state.scrollTo = ev.id;
+    renderCase();
+    successBanner('✅ Mail tilføjet til «' + (c.title || 'sag') + '»');
   } catch (e) { fail(e); }
 }
 function setupMailReceiver() {
@@ -858,7 +900,7 @@ function setupMailReceiver() {
     if (e.origin !== location.origin) return;
     const d = e.data;
     if (!d || d.type !== 'caseboard-mail' || d.nonce !== MAIL_NONCE || !d.email) return;
-    addMailToCase(d.email);
+    receiveMail(d.email);
   });
 }
 

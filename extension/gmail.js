@@ -43,8 +43,8 @@
     btn.addEventListener('click', (e) => {
       e.stopPropagation(); e.preventDefault();
       chrome.runtime.sendMessage({ type: 'add-mail', email: scrape() }, () => {});
-      btn.textContent = '✓ Sendt til CaseBoard';
-      setTimeout(() => { btn.textContent = '📎 Tilføj til sag'; }, 1800);
+      btn.textContent = '✓ Sendt — vælg sag i CaseBoard';
+      setTimeout(() => { btn.textContent = '📎 Tilføj til sag'; }, 2200);
     });
     subj.appendChild(btn);   // ØVERST — lige efter emnet
   }

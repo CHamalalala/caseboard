@@ -292,3 +292,14 @@ body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}
 .cit-add{display:flex;gap:6px;align-items:flex-start;margin-top:6px}
 .cit-input{flex:1;border:1px solid #e0d5b0;border-radius:6px;padding:5px 8px;font-size:13px;font-family:inherit;resize:vertical}
 .cit-page{width:54px;border:1px solid #e0d5b0;border-radius:6px;padding:5px 6px;font-size:13px;font-family:inherit}
+/* mail-sags-vælger + success-banner */
+.mc-mail{background:#f4f6fb;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.mc-subj{font-weight:800;color:var(--navy)}
+.mc-meta{font-size:12px;margin-top:2px}
+.mc-q{font-weight:600;color:#33508a;margin:8px 0 6px}
+.mc-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto}
+.mc-opt{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer}
+.mc-opt:hover{background:#f7f9fd}.mc-opt.on{border-color:var(--blue);background:#eef2fb}
+.mc-txt{flex:1}.mc-title{font-weight:600;color:var(--navy)}.mc-sub{font-size:12px}
+.success-banner{position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-110%);background:#2e7d32;color:#fff;padding:14px 30px;border-radius:0 0 14px 14px;font-size:15px;font-weight:700;z-index:400;box-shadow:0 6px 24px rgba(0,0,0,.28);transition:transform .35s ease}
+.success-banner.show{transform:translateX(-50%) translateY(0)}
