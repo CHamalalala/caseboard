@@ -844,7 +844,7 @@ async function addMailEventTo(c, mail) {
   c.events.push(ev); c.updated = Date.now(); await db.saveCaseRec(c);
   return ev;
 }
-const successBanner = (msg) => { const b = el('div', { class: 'success-banner' }, msg); document.body.append(b); setTimeout(() => b.classList.add('show'), 10); setTimeout(() => { b.classList.remove('show'); setTimeout(() => b.remove(), 400); }, 3000); };
+const successBanner = (msg) => { document.querySelector('.success-banner')?.remove(); const b = el('div', { class: 'success-banner' }, msg); document.body.append(b); setTimeout(() => b.classList.add('show'), 10); setTimeout(() => { b.classList.remove('show'); setTimeout(() => b.remove(), 400); }, 3000); };
 
 // vælger: hvilken sag skal mailen i? (aktiv sag forvalgt). Resolver caseId | 'new' | null.
 function mailCaseModal(mail, cases, activeId) {
@@ -876,22 +876,23 @@ function mailCaseModal(mail, cases, activeId) {
   });
 }
 
-// modtag en mail (fra udvidelsen ELLER .eml-drop) → vælg sag → tilføj + synlig bekræftelse
-async function receiveMail(mail) {
-  try {
-    await refreshCases();
-    const choice = await mailCaseModal(mail, state.cases, state.activeCaseId);
-    if (!choice) return;
-    let c;
-    if (choice === 'new') { c = newCase((mail.subject || 'Ny sag').slice(0, 60)); await db.saveCaseRec(c); await refreshCases(); }
-    else c = await db.getCase(choice);
-    if (!c) return;
-    const ev = await addMailEventTo(c, mail);
-    openCaseObj(c);
-    state.tab = 'tidslinje'; state.expanded = new Set([ev.id]); state.selEvent = ev.id; state.scrollTo = ev.id;
-    renderCase();
-    successBanner('✅ Mail tilføjet til «' + (c.title || 'sag') + '»');
-  } catch (e) { fail(e); }
+// modtag en mail (fra udvidelsen ELLER .eml-drop) → vælg sag → tilføj + synlig bekræftelse.
+// GLM-review: SERIALISÉR (kø) så to mails ikke racer (lost-update) eller stabler to modaller.
+let _mailQueue = Promise.resolve();
+function receiveMail(mail) { _mailQueue = _mailQueue.then(() => receiveMailNow(mail)).catch(fail); return _mailQueue; }
+async function receiveMailNow(mail) {
+  await refreshCases();
+  const choice = await mailCaseModal(mail, state.cases, state.activeCaseId);
+  if (!choice) return;
+  // 'new': gem først NÅR mailen er tilføjet → ingen tom-sag-orphan ved fejl (GLM #3)
+  const c = choice === 'new' ? newCase((mail.subject || 'Ny sag').slice(0, 60)) : await db.getCase(choice);
+  if (!c) return;
+  const ev = await addMailEventTo(c, mail);     // gemmer sagen MED mailen
+  await refreshCases();
+  openCaseObj(c);
+  state.tab = 'tidslinje'; state.expanded = new Set([ev.id]); state.selEvent = ev.id; state.scrollTo = ev.id;
+  renderCase();
+  successBanner('✅ Mail tilføjet til «' + (c.title || 'sag') + '»');
 }
 function setupMailReceiver() {
   document.documentElement.dataset.caseboard = '1';      // udvidelsen kan se at CaseBoard er åben
