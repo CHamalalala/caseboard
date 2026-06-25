@@ -346,9 +346,12 @@ function summaryCard(su, i = 0) {
     e.preventDefault(); card.setPointerCapture?.(e.pointerId);
     const sx = e.clientX, sy = e.clientY, ox = su.x, oy = su.y;
     card.classList.add('dragging');
-    const move = (ev) => { su.x = Math.max(0, ox + ev.clientX - sx); su.y = Math.max(0, oy + ev.clientY - sy); card.style.left = su.x + 'px'; card.style.top = su.y + 'px'; redrawThreads(); };
-    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); card.classList.remove('dragging'); save(); };
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+    const move = (ev) => { su.x = Math.max(0, ox + ev.clientX - sx); su.y = Math.max(0, oy + ev.clientY - sy); card.style.left = su.x + 'px'; card.style.top = su.y + 'px'; redrawThreadsRaf(); };
+    const up = () => {
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+      card.releasePointerCapture?.(e.pointerId); card.classList.remove('dragging'); save(); redrawThreads();
+    };
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
   });
   return card;
 }
@@ -393,9 +396,10 @@ function renderCase() {
     : state.tab === 'frister' ? renderFrister(c)
     : state.tab === 'soeg' ? renderSoeg(c) : renderOverblik(c);
   root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, el('div', { class: 'sectionbody' }, view));
-  // forbindelses-tråde: ALLE opsummeringer (hver sin farve); valgt fremhæves (kun på tidslinjen)
+  // forbindelses-tråde: ALLE opsummeringer (hver sin farve); valgt fremhæves (kun på tidslinjen).
+  // Synkront (getBoundingClientRect tvinger layout) — mere robust end rAF, der throttles i baggrunds-faner.
   if (state.tab === 'tidslinje') {
-    requestAnimationFrame(() => { const layout = root().querySelector('.layout'); if (layout) drawConnectors(layout, c.summaries || [], state.selSummary); });
+    const layout = root().querySelector('.layout'); if (layout) drawConnectors(layout, c.summaries || [], state.selSummary);
   } else clearConnectors();
 }
 function redrawThreads() {
@@ -404,6 +408,8 @@ function redrawThreads() {
     if (layout) drawConnectors(layout, state.case.summaries || [], state.selSummary);
   }
 }
+let _rafPending = false;     // GLM-review: batch gen-tegning under træk (undgå perf-bombe)
+function redrawThreadsRaf() { if (_rafPending) return; _rafPending = true; requestAnimationFrame(() => { _rafPending = false; redrawThreads(); }); }
 let _redrawTimer;
 window.addEventListener('resize', () => { clearTimeout(_redrawTimer); _redrawTimer = setTimeout(redrawThreads, 120); });
 
@@ -429,7 +435,8 @@ function renderTidslinje(c) {
     ...(evs.length ? evs.map(eventCard) : [el('p', { class: 'muted' }, all.length ? 'Ingen begivenheder matcher filteret.' : 'Ingen bilag endnu. Tryk “➕ Indsæt bilag” og upload et dokument, en PDF eller et billede.')]));
   const sums = c.summaries || [];
   const maxY = sums.reduce((m, s) => Math.max(m, s.y || 0), 0);
-  const canvas = el('div', { class: 'canvas', style: `min-height:${Math.max(440, maxY + 260)}px` },
+  const maxX = sums.reduce((m, s) => Math.max(m, s.x || 0), 0);
+  const canvas = el('div', { class: 'canvas', style: `min-height:${Math.max(440, maxY + 260)}px;min-width:${Math.max(300, maxX + 330)}px` },
     el('div', { class: 'canvas-hint' }, '🎨 Frit lærred — træk opsummeringerne rundt; hver har sin egen farve på trådene til begivenhederne.'),
     ...(sums.length ? sums.map((s, i) => summaryCard(s, i)) : [el('p', { class: 'muted canvas-empty' }, 'Ingen opsummeringer endnu — tryk “＋ Opsummering” i toppen.')]));
   return el('div', { class: 'layout' }, timeline, canvas);

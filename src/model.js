@@ -43,7 +43,7 @@ export const SUMMARY_COLORS = ['#e08a00', '#2b5797', '#b4308f', '#2e7d32', '#7a4
 export function newSummary(title = 'Ny opsummering', i = 0) {
   return {
     id: uid('su'), title, body: '', links: [], anchorDate: null,
-    x: 16 + (i % 3) * 24, y: 16 + i * 14,            // startposition på lærredet
+    x: 16 + (i % 3) * 24, y: 16 + i * 150,           // startposition (spredt, så kort ikke overlapper)
     color: SUMMARY_COLORS[i % SUMMARY_COLORS.length],
   };
 }

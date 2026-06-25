@@ -28,13 +28,19 @@ export function drawConnectors(layoutEl, summaries, selectedId) {
     const dim = selectedId && !sel;                 // andre dæmpes når én er valgt
     const color = s.color || '#e08a00';
     const sr = card.getBoundingClientRect();
-    const sx = sr.left - lr.left;                    // venstre kant af opsummeringen
+    const sLeft = sr.left - lr.left, sRight = sr.right - lr.left;
     const sy = sr.top - lr.top + Math.min(sr.height, 64) / 2;
     for (const l of s.links) {
       const ec = layoutEl.querySelector('.card.ev[data-id="' + CSS.escape(l.refId) + '"]');
       if (!ec) continue;
       const er = ec.getBoundingClientRect();
-      const ex = er.right - lr.left, ey = er.top - lr.top + Math.min(er.height, 42) / 2;
+      const eLeft = er.left - lr.left, eRight = er.right - lr.left;
+      const ey = er.top - lr.top + Math.min(er.height, 42) / 2;
+      // vælg de NÆRMESTE kanter, så tråden ikke krydser baglæns til en knude (GLM-review)
+      let ex, sx;
+      if (sLeft >= eRight) { ex = eRight; sx = sLeft; }        // opsummering til højre for event
+      else if (sRight <= eLeft) { ex = eLeft; sx = sRight; }   // opsummering til venstre
+      else { ex = eRight; sx = sLeft; }                        // overlap → default
       const mx = (ex + sx) / 2;
       const path = document.createElementNS(NS, 'path');
       path.setAttribute('d', `M ${ex} ${ey} C ${mx} ${ey}, ${mx} ${sy}, ${sx} ${sy}`);
