@@ -13,7 +13,9 @@ En lille, modulær PWA. Ingen build-step (ren HTML/CSS/JS), så den deployer dir
 | `src/search.js` | Søgning: MiniSearch + substring-fallback (danske sammensatte ord); scope-filtre; snippet/highlight. |
 | `src/extract.js` | Dokument-tekst: pdf.js (PDF) + fflate (.docx) + tekstfiler → søgbar tekst. Offline. |
 | `src/export.js` | Pakke-eksport (zip via fflate): Bilag/ + `Sagsoversigt.html` + gen-import-json + LÆS-MIG. `overviewHtml` genbruges til Print. |
-| `src/connectors.js` | SVG-streger: valgt opsummering → dens begivenheder (Fase D). |
+| `src/connectors.js` | SVG-tråde fra opsummeringer (frit lærred) → begivenheder; hver sin farve. Synkron tegning (rAF throttles i baggrund). |
+| `src/summarize.js` | EKSTRAKTIV opsummering (offline, deterministisk, **nul hallucination** — output ⊂ input) + overskrift-forslag. |
+| `extension/` | MV3 browser-udvidelse: "📎 Tilføj til sag" i Gmail → CaseBoard (nonce+origin-valideret `message`-modtager i app.js). |
 | `src/log.js` | ÉN log-kanal. | `src/errors.js` | TYPEDE fejl. |
 | `vendor/` | Lokale (offline) libs: `minisearch`, `fflate`, `pdf.min.js` + `pdf.worker.min.js`. Ingen CDN. |
 | `manifest.webmanifest`, `sw.js`, `icons/` | PWA: installbar + offline. SW = network-first; bump `CACHE` ved hver deploy. |
