@@ -4,6 +4,7 @@ import { Err, AppError } from './errors.js';
 import * as db from './db.js';
 import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon } from './model.js';
 import { el, toast, insertModal } from './ui.js';
+import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
 
 const root = () => document.getElementById('app');
 const state = {
@@ -15,6 +16,7 @@ const SECTIONS = [
   { id: 'overblik', label: 'Overblik', icon: '📋' },
   { id: 'tidslinje', label: 'Tidslinje', icon: '📅' },
   { id: 'dokumenter', label: 'Dokumenter', icon: '📎' },
+  { id: 'soeg', label: 'Søg', icon: '🔎' },
 ];
 let _urls = [];                              // aktive blob-URL'er (ryddes ved hver re-render)
 const blobUrl = (blob) => { const u = URL.createObjectURL(blob); _urls.push(u); return u; };
@@ -176,7 +178,7 @@ function renderHome() {
       el('div', { class: 'dropnote' }, '⤓ … eller træk en sagsfil ind her'),
       el('p', { class: 'hint muted' }, '“Åbn en sag” henter en sagsfil du har gemt eller fået tilsendt.')));
   } else {
-    body.append(el('div', { class: 'casegrid' }, ...state.cases.sort((a, b) => (b.updated || 0) - (a.updated || 0)).map(caseCard),
+    body.append(globalSearchBar(), el('div', { class: 'casegrid' }, ...state.cases.sort((a, b) => (b.updated || 0) - (a.updated || 0)).map(caseCard),
       el('div', { class: 'casecard add', onclick: createCase }, el('div', { class: 'plus' }, '＋'), el('div', {}, 'Ny sag'))));
   }
   // træk-en-sagsfil-ind (forstås nemmere end en fil-dialog)
@@ -313,7 +315,8 @@ function renderCase() {
       s.icon + ' ' + s.label, counts[s.id] != null ? el('span', { class: 'badge' }, String(counts[s.id])) : null)));
 
   const view = state.tab === 'tidslinje' ? renderTidslinje(c)
-    : state.tab === 'dokumenter' ? renderDokumenter(c) : renderOverblik(c);
+    : state.tab === 'dokumenter' ? renderDokumenter(c)
+    : state.tab === 'soeg' ? renderSoeg(c) : renderOverblik(c);
   root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, el('div', { class: 'sectionbody' }, view));
 }
 
@@ -371,6 +374,78 @@ function renderDokumenter(c) {
       el('span', { class: 'docrow-date muted' }, daDate(ev.date)),
       el('button', { class: 'btn sm', onclick: () => openOriginal(a) }, '🔍 Åbn'),
       el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(a) }, '⤓ Eksportér'))));
+}
+
+// ---- Sektion: Søg (med scope-filtre) ----
+const kindMeta = (k) => KINDS.find((x) => x.id === k) || { icon: '•', label: k };
+function jumpInCase(h) {
+  if (h.kind === 'opsummering') { state.tab = 'tidslinje'; state.selSummary = h.refId; state.selEvent = null; renderCase(); return; }
+  if (h.kind === 'person') { state.tab = 'personer'; renderCase(); return; }
+  state.tab = 'tidslinje'; state.expanded.add(h.refId); state.selEvent = h.refId; state.selSummary = null; renderCase();
+}
+function resultRow(h, docMap, terms, onJump) {
+  const d = docMap[h.id] || {};
+  const src = [d.text, d.doctext, d.filename].filter(Boolean).join('  ');
+  const snip = el('div', { class: 'sr-snip' }); if (src) highlight(snip, snippet(src, terms), terms);
+  return el('div', { class: 'sresult', onclick: onJump },
+    el('div', { class: 'sr-head' },
+      el('span', { class: 'sr-kind' }, kindMeta(h.kind).icon + ' ' + kindMeta(h.kind).label),
+      h.caseTitle && state.view === 'home' ? el('span', { class: 'sr-case' }, h.caseTitle) : null,
+      h.date ? el('span', { class: 'sr-date' }, daDate(h.date)) : null,
+      el('span', { class: 'sr-title' }, h.title || '(uden titel)')),
+    src ? snip : null);
+}
+function renderResults(container, hits, docMap, query, onJump) {
+  const terms = query.trim().split(/\s+/).filter(Boolean);
+  if (!query.trim()) return container.replaceChildren(el('p', { class: 'muted' }, 'Skriv for at søge.'));
+  if (!hits.length) return container.replaceChildren(el('p', { class: 'muted' }, 'Ingen træf for “' + query + '”.'));
+  container.replaceChildren(el('div', { class: 'sr-count muted' }, hits.length + ' træf — klik for at hoppe dertil'),
+    ...hits.slice(0, 60).map((h) => resultRow(h, docMap, terms, () => onJump(h))));
+}
+function renderSoeg(c) {
+  const wrap = el('div', { class: 'searchview' });
+  const input = el('input', { class: 'searchbox', type: 'search', placeholder: 'Søg i sagen — titler, noter, dokument-indhold, personer …' });
+  const chipsBar = el('div', { class: 'scopechips' });
+  const results = el('div', { class: 'searchresults' }, el('p', { class: 'muted' }, 'Skriv for at søge.'));
+  let ms = null, docMap = {}, ready = false;
+  const kinds = new Set();
+  for (const k of KINDS) {
+    const chip = el('span', { class: 'scopechip', onclick: () => { kinds.has(k.id) ? kinds.delete(k.id) : kinds.add(k.id); chip.classList.toggle('on'); update(); } }, k.icon + ' ' + k.label);
+    chipsBar.append(chip);
+  }
+  const update = () => { if (ready) renderResults(results, runSearch(ms, Object.values(docMap), input.value, kinds), docMap, input.value, jumpInCase); };
+  input.addEventListener('input', update);
+  wrap.append(
+    el('div', { class: 'searchbar-row' }, el('span', { class: 'sicon' }, '🔎'), input),
+    el('div', { class: 'scoperow' }, el('span', { class: 'muted sm' }, 'Søg kun i (vælg for at filtrere):'), chipsBar),
+    results);
+  (async () => {
+    const fileTexts = {};
+    for (const fid of caseFileIds(c)) { const rec = await db.getFile(fid); if (rec && rec.text) fileTexts[fid] = rec.text; }
+    const docs = caseToDocs(c, fileTexts); docMap = Object.fromEntries(docs.map((d) => [d.id, d]));
+    ms = buildIndex(docs); ready = true; setTimeout(() => input.focus(), 0); update();
+  })();
+  return wrap;
+}
+
+// ---- Global søgning (hjem, på tværs af alle sager) ----
+function globalSearchBar() {
+  const wrap = el('div', { class: 'globalsearch' });
+  const input = el('input', { class: 'searchbox', type: 'search', placeholder: '🔎 Søg på tværs af ALLE dine sager …' });
+  const results = el('div', { class: 'searchresults global' });
+  const docMap = {};
+  for (const c of state.cases) for (const d of caseToDocs(c, {})) docMap[d.id] = d;
+  const ms = buildIndex(Object.values(docMap));
+  const jumpGlobal = async (h) => {
+    await openCaseById(h.caseId);
+    state.tab = 'tidslinje';
+    if (h.kind === 'opsummering') { state.selSummary = h.refId; } else { state.expanded.add(h.refId); state.selEvent = h.refId; }
+    renderCase();
+  };
+  const update = () => renderResults(results, runSearch(ms, Object.values(docMap), input.value, new Set()), docMap, input.value, jumpGlobal);
+  input.addEventListener('input', update);
+  wrap.append(el('div', { class: 'searchbar-row big' }, el('span', { class: 'sicon' }, '🔎'), input), results);
+  return wrap;
 }
 
 // ---------- migration (v1 -> cases) + boot ----------
