@@ -17,7 +17,7 @@ export function caseToDocs(c, fileTexts = {}) {
     const docText = att.map((a) => fileTexts[a.fileId] || '').join('\n');
     // begivenhed (titel/note/parter/filnavn)
     docs.push({ id: c.id + ':ev:' + ev.id, kind: 'begivenhed', caseId: c.id, caseTitle: c.title, refId: ev.id,
-      date: ev.date, title: ev.title, text: [ev.body, ev.parties].filter(Boolean).join('\n'),
+      date: ev.date, title: ev.title, text: [ev.body, ev.parties, (ev.tags || []).join(' ')].filter(Boolean).join('\n'),
       filename: att.map((a) => a.name).join(' '), doctext: '' });
     // separat "dokument-indhold"-dok så man kan søge KUN inde i dokumenterne
     if (docText.trim()) docs.push({ id: c.id + ':doc:' + ev.id, kind: 'dokument', caseId: c.id, caseTitle: c.title,

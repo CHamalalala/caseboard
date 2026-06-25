@@ -8,7 +8,7 @@ export const uid = (p = 'id') =>
 export const today = () => new Date().toISOString().slice(0, 10);
 
 export function newCase(title = 'Ny sag') {
-  return { id: uid('case'), schema: SCHEMA, title, meta: {}, events: [], summaries: [], updated: Date.now() };
+  return { id: uid('case'), schema: SCHEMA, title, meta: {}, events: [], summaries: [], people: [], deadlines: [], updated: Date.now() };
 }
 
 export function newEvent(p = {}) {
@@ -20,7 +20,22 @@ export function newEvent(p = {}) {
     parties: p.parties || '',
     body: p.body || '',
     attachments: p.attachments || [],      // [{fileId, name}]
+    tags: p.tags || [],                    // etiketter (emne/bevis/...)
+    people: p.people || [],                // personId'er knyttet til begivenheden
   };
+}
+
+export const ROLES = ['Klient', 'Modpart', 'Vidne', 'Advokat', 'Dommer', 'Andet'];
+export function newPerson(name = '') { return { id: uid('pe'), name: name || 'Ny person', role: 'Andet', note: '' }; }
+export function newDeadline(p = {}) { return { id: uid('dl'), date: p.date || today(), title: p.title || 'Ny frist', done: false }; }
+
+// status for en frist ift. i dag (til farvekodning) — testet
+export function deadlineStatus(date, todayStr = today()) {
+  if (!date) return 'future';
+  if (date < todayStr) return 'overdue';
+  const d = new Date(date), t = new Date(todayStr);
+  const days = Math.round((d - t) / 86400000);
+  return days <= 7 ? 'soon' : 'future';
 }
 
 export function newSummary(title = 'Ny opsummering') {

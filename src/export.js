@@ -32,7 +32,7 @@ export function buildShareZip(c, fileRecs, jsonString) {
   return { folder, bytes: zipSync(wrapped, { level: 6 }) };
 }
 
-function overviewHtml(c, evs, bilagPath) {
+export function overviewHtml(c, evs, bilagPath) {
   const row = (ev) => {
     const links = (ev.attachments || []).map((a) => bilagPath[a.fileId]
       ? `<a href="${esc(bilagPath[a.fileId])}">📎 ${esc(a.name)}</a>` : `<span>📎 ${esc(a.name)}</span>`).join(' ');

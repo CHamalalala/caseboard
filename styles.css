@@ -168,3 +168,32 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .sr-title{font-weight:700;color:var(--navy);flex:1}
 .sr-snip{font-size:13px;color:#4a5568;margin-top:4px;line-height:1.4}
 .sr-snip mark{background:#ffe9a8;color:inherit;border-radius:2px;padding:0 1px}
+/* ===== Fase C: etiketter, filtre, personer, frister ===== */
+.tagsrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}
+.etag{font-size:12px;background:#eef2fa;border:1px solid #d6e0f2;color:#33508a;border-radius:12px;padding:1px 9px}
+.etag .x{cursor:pointer;color:#c0560f}
+.taginput{border:1px dashed #c3cee2;border-radius:12px;padding:2px 9px;font-size:12px;outline:none;width:90px;font-family:inherit}
+.ptag{font-size:12px;background:#fff;border:1px solid #d6e0f2;color:#5b6678;border-radius:12px;padding:1px 9px;cursor:pointer}
+.ptag.on{background:#eaf3ea;border-color:#a9cf9f;color:#2e7d32;font-weight:600}
+.filterbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 10px;padding:8px 10px;background:#fff;border:1px solid var(--line);border-radius:8px}
+.fchip{font-size:12px;font-weight:600;background:#f0f3f8;border:1px solid #dbe2ee;color:#4a5568;border-radius:12px;padding:2px 10px;cursor:pointer;text-transform:capitalize}
+.fchip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.fsep{color:#c3cee2}.fclear{font-size:12px;color:#c0560f;cursor:pointer;font-weight:600;margin-left:4px}
+.pv-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.personcard{background:#fff;border:1px solid var(--line);border-left:4px solid var(--soren);border-radius:10px;padding:12px 14px;margin:0 0 10px}
+.pc-head{display:flex;align-items:center;gap:10px}
+.pc-name{font-weight:800;font-size:16px;color:var(--navy);flex:1;outline:none}
+.pc-note{font-size:13px;color:#4a5568;margin:6px 0;min-height:16px;outline:none}
+.roleselect{border:1px solid #ccd4e2;border-radius:6px;padding:3px 6px;font-size:12px;font-family:inherit;background:#f7f9fd}
+.pc-events{margin-top:8px;border-top:1px solid #f0f3f8;padding-top:8px}
+.pc-ev{font-size:13px;padding:3px 0;cursor:pointer;color:#33508a}.pc-ev:hover{text-decoration:underline}
+.pc-ev .d{color:var(--blue);font-weight:700}
+.fristrow{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-left:4px solid #9aa7bd;border-radius:8px;padding:8px 12px;margin:0 0 8px}
+.fristrow.overdue{border-left-color:#c62828;background:#fdf3f2}
+.fristrow.soon{border-left-color:#e08a00;background:#fff9ef}
+.fristrow.done{opacity:.55}.fristrow.done .ftitle{text-decoration:line-through}
+.fdate{border:1px solid #ccd4e2;border-radius:6px;padding:3px 6px;font-size:13px;font-family:inherit}
+.ftitle{flex:1;font-weight:600;color:var(--navy);outline:none}
+.fstatus{font-size:12px;font-weight:700;color:#8a6d1f}
+.fristrow.overdue .fstatus{color:#c62828}
+.dl-overdue{color:#c62828!important}.dl-soon{color:#e08a00!important}

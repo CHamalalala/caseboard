@@ -2,21 +2,25 @@
 import { log } from './log.js';
 import { Err, AppError } from './errors.js';
 import * as db from './db.js';
-import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon } from './model.js';
+import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon, ROLES, newPerson, newDeadline, deadlineStatus } from './model.js';
 import { el, toast, insertModal } from './ui.js';
 import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
-import { buildShareZip } from './export.js';
+import { buildShareZip, overviewHtml } from './export.js';
 
 const root = () => document.getElementById('app');
 const state = {
   view: 'home', case: null, cases: [], history: [],
   openCaseObjs: {}, openOrder: [], activeCaseId: null, tab: 'overblik',  // faner: åbne sager + sektion
   expanded: new Set(), selEvent: null, selSummary: null,
+  tlFilter: { types: new Set(), tags: new Set() },   // filtre på tidslinjen
 };
+const resetView = () => { state.expanded = new Set(); state.selEvent = state.selSummary = null; state.tlFilter = { types: new Set(), tags: new Set() }; };
 const SECTIONS = [
   { id: 'overblik', label: 'Overblik', icon: '📋' },
   { id: 'tidslinje', label: 'Tidslinje', icon: '📅' },
   { id: 'dokumenter', label: 'Dokumenter', icon: '📎' },
+  { id: 'personer', label: 'Personer', icon: '👤' },
+  { id: 'frister', label: 'Frister', icon: '⏰' },
   { id: 'soeg', label: 'Søg', icon: '🔎' },
 ];
 let _urls = [];                              // aktive blob-URL'er (ryddes ved hver re-render)
@@ -42,13 +46,13 @@ function openCaseObj(c) {
   if (!state.openOrder.includes(c.id)) state.openOrder.push(c.id);
   state.openCaseObjs[c.id] = c;
   state.activeCaseId = c.id; state.case = c; state.view = 'case'; state.tab = 'overblik';
-  state.expanded = new Set(); state.selEvent = state.selSummary = null;
+  resetView();
   renderCase();
 }
 function switchCase(id) {
   if (!state.openCaseObjs[id]) return;
   state.activeCaseId = id; state.case = state.openCaseObjs[id]; state.view = 'case';
-  state.expanded = new Set(); state.selEvent = state.selSummary = null;
+  resetView();
   renderCase();
 }
 function closeCase(id) {
@@ -266,6 +270,19 @@ function eventCard(ev) {
     if (ev.parties) body.append(el('div', { class: 'parties' }, ev.parties));
     body.append(el('div', { class: 'note-label muted' }, 'Note (din — dokumentet kan ikke ændres):'),
       editable('div', ev.body, (v) => patch(ev, 'body', v), 'body'));
+    // etiketter
+    ev.tags = ev.tags || [];
+    body.append(el('div', { class: 'tagsrow' }, el('span', { class: 'muted sm' }, '🏷'),
+      ...ev.tags.map((t) => el('span', { class: 'etag' }, t, el('b', { class: 'x', onclick: () => { ev.tags = ev.tags.filter((x) => x !== t); save(); renderCase(); } }, ' ✕'))),
+      el('input', { class: 'taginput', placeholder: '+ etiket', onkeydown: (e) => { if (e.key === 'Enter') { const v = e.target.value.trim(); if (v && !ev.tags.includes(v)) { ev.tags.push(v); save(); renderCase(); } } } })));
+    // personer (kun hvis sagen har nogen)
+    const ppl = state.case.people || [];
+    if (ppl.length) {
+      ev.people = ev.people || [];
+      body.append(el('div', { class: 'tagsrow' }, el('span', { class: 'muted sm' }, '👤'),
+        ...ppl.map((p) => el('span', { class: 'ptag' + (ev.people.includes(p.id) ? ' on' : ''),
+          onclick: () => { ev.people = ev.people.includes(p.id) ? ev.people.filter((x) => x !== p.id) : [...ev.people, p.id]; save(); renderCase(); } }, p.name))));
+    }
     card.append(body);
   }
   return card;
@@ -325,28 +342,42 @@ function renderCase() {
       el('button', { class: 'btn primary', onclick: addEventFromModal }, '➕ Indsæt bilag'),
       el('button', { class: 'btn', onclick: () => { state.tab = 'tidslinje'; addSummary(); } }, '＋ Opsummering'),
       el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil (til backup / gen-import)' }, '💾 Gem sag'),
-      el('button', { class: 'btn ghost', onclick: () => exportShare(c), title: 'Pak sagen som en mappe (Bilag + læsbar oversigt) — nem at dele med en kollega' }, '📦 Del')));
+      el('button', { class: 'btn ghost', onclick: () => exportShare(c), title: 'Pak sagen som en mappe (Bilag + læsbar oversigt) — nem at dele med en kollega' }, '📦 Del'),
+      el('button', { class: 'btn ghost', onclick: () => printChronology(c), title: 'Print en ren kronologi (til retten/møder) — vælg "Gem som PDF"' }, '🖨 Print')));
 
-  const counts = { tidslinje: c.events.length, dokumenter: caseFileIds(c).length };
+  const counts = { tidslinje: c.events.length, dokumenter: caseFileIds(c).length, personer: (c.people || []).length, frister: (c.deadlines || []).length };
   const sectiontabs = el('div', { class: 'sectiontabs' }, ...SECTIONS.map((s) =>
     el('div', { class: 'sectiontab' + (state.tab === s.id ? ' active' : ''), onclick: () => setTab(s.id) },
-      s.icon + ' ' + s.label, counts[s.id] != null ? el('span', { class: 'badge' }, String(counts[s.id])) : null)));
+      s.icon + ' ' + s.label, counts[s.id] ? el('span', { class: 'badge' }, String(counts[s.id])) : null)));
 
   const view = state.tab === 'tidslinje' ? renderTidslinje(c)
     : state.tab === 'dokumenter' ? renderDokumenter(c)
+    : state.tab === 'personer' ? renderPersoner(c)
+    : state.tab === 'frister' ? renderFrister(c)
     : state.tab === 'soeg' ? renderSoeg(c) : renderOverblik(c);
   root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, el('div', { class: 'sectionbody' }, view));
 }
 
 // ---- Sektion: Tidslinje (begivenheder + opsummeringer) ----
 function renderTidslinje(c) {
-  const evs = sortEvents(c.events);
+  const all = sortEvents(c.events);
+  const allTags = [...new Set(all.flatMap((e) => e.tags || []))].sort();
+  const f = state.tlFilter;
+  const evs = all.filter((e) => (!f.types.size || f.types.has(e.type)) && (!f.tags.size || (e.tags || []).some((t) => f.tags.has(t))));
+  const fchip = (set, val, label) => el('span', { class: 'fchip' + (set.has(val) ? ' on' : ''), onclick: () => { set.has(val) ? set.delete(val) : set.add(val); renderCase(); } }, label);
+  const filterbar = all.length ? el('div', { class: 'filterbar' },
+    el('span', { class: 'muted sm' }, 'Filtrér:'),
+    ...TYPES.map((t) => fchip(f.types, t, t)),
+    allTags.length ? el('span', { class: 'fsep' }, '|') : null,
+    ...allTags.map((t) => fchip(f.tags, t, '🏷 ' + t)),
+    (f.types.size || f.tags.size) ? el('span', { class: 'fclear', onclick: () => { f.types.clear(); f.tags.clear(); renderCase(); } }, '✕ Ryd') : null) : null;
   const timeline = el('main', { class: 'timeline' },
-    el('div', { class: 'tl-head' }, el('h2', {}, 'Tidslinje'),
-      evs.length ? el('div', { class: 'tl-tools' },
+    el('div', { class: 'tl-head' }, el('h2', {}, 'Tidslinje' + (evs.length !== all.length ? ` (${evs.length}/${all.length})` : '')),
+      all.length ? el('div', { class: 'tl-tools' },
         el('button', { class: 'mini-btn', onclick: () => { evs.forEach((e) => state.expanded.add(e.id)); renderCase(); } }, 'Udvid alle'),
         el('button', { class: 'mini-btn', onclick: () => { state.expanded.clear(); renderCase(); } }, 'Fold alle')) : null),
-    ...(evs.length ? evs.map(eventCard) : [el('p', { class: 'muted' }, 'Ingen bilag endnu. Tryk “➕ Indsæt bilag” og upload et dokument, en PDF eller et billede.')]));
+    filterbar,
+    ...(evs.length ? evs.map(eventCard) : [el('p', { class: 'muted' }, all.length ? 'Ingen begivenheder matcher filteret.' : 'Ingen bilag endnu. Tryk “➕ Indsæt bilag” og upload et dokument, en PDF eller et billede.')]));
   const anchored = c.summaries.filter((s) => s.anchorDate).sort((a, b) => a.anchorDate < b.anchorDate ? -1 : 1);
   const rest = c.summaries.filter((s) => !s.anchorDate);
   const side = el('aside', { class: 'summaries' },
@@ -370,6 +401,12 @@ function renderOverblik(c) {
     el('div', { class: 'ovcard' }, el('h3', {}, 'Sagsdata'),
       ...Object.entries(c.meta || {}).map(([k, v]) => el('div', { class: 'ovrow' }, el('span', {}, k), el('span', { class: 'd' }, String(v)))),
       Object.keys(c.meta || {}).length ? null : el('div', { class: 'muted' }, 'Ingen sagsdata endnu')),
+    el('div', { class: 'ovcard' }, el('h3', {}, 'Kommende frister'),
+      ...(() => {
+        const dls = (c.deadlines || []).filter((d) => !d.done).sort((a, b) => a.date < b.date ? -1 : 1).slice(0, 4);
+        if (!dls.length) return [el('div', { class: 'muted' }, 'Ingen åbne frister'), el('div', { class: 'ovlink', onclick: () => jump('frister') }, '+ Tilføj en frist')];
+        return [...dls.map((d) => el('div', { class: 'ovrow' }, el('span', { class: 'd dl-' + deadlineStatus(d.date) }, daDate(d.date)), el('span', { class: 'ovlink', onclick: () => jump('frister') }, d.title)))];
+      })()),
     el('div', { class: 'ovcard' }, el('h3', {}, 'Emner / opsummeringer'),
       ...(c.summaries.length ? c.summaries.map((s) => el('div', { class: 'ovrow' },
         el('span', { class: 'ovlink', onclick: () => jump('tidslinje', () => { state.selSummary = s.id; state.selEvent = null; }) }, s.title || '(uden titel)'),
@@ -392,6 +429,61 @@ function renderDokumenter(c) {
       el('span', { class: 'docrow-date muted' }, daDate(ev.date)),
       el('button', { class: 'btn sm', onclick: () => openOriginal(a) }, '🔍 Åbn'),
       el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(a) }, '⤓ Eksportér'))));
+}
+
+// ---- Print: ren kronologi (genbruger den læsbare oversigt) → native PDF ----
+function printChronology(c) {
+  const html = overviewHtml(c, sortEvents(c.events), {});
+  const w = window.open('', '_blank');
+  if (!w) return toast('Tillad pop op-vindue for at printe', 'warn');
+  w.document.write(html); w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) { /* bruger kan selv printe */ } }, 500);
+}
+
+// ---- Sektion: Personer / vidner ----
+function roleSelect(p) {
+  return el('select', { class: 'roleselect', onchange: (e) => patch(p, 'role', e.target.value) },
+    ...ROLES.map((r) => el('option', p.role === r ? { value: r, selected: 'selected' } : { value: r }, r)));
+}
+function renderPersoner(c) {
+  c.people = c.people || [];
+  const wrap = el('div', { class: 'peopleview' },
+    el('div', { class: 'pv-bar' }, el('button', { class: 'btn primary', onclick: () => { c.people.unshift(newPerson()); save(); renderCase(); } }, '➕ Tilføj person')));
+  if (!c.people.length) { wrap.append(el('p', { class: 'muted' }, 'Ingen personer endnu. Tilføj parter, vidner og advokater — og knyt begivenheder til dem fra tidslinjen.')); return wrap; }
+  for (const p of c.people) {
+    const evs = sortEvents((c.events || []).filter((e) => (e.people || []).includes(p.id)));
+    wrap.append(el('div', { class: 'personcard' },
+      el('div', { class: 'pc-head' },
+        editable('div', p.name, (v) => patch(p, 'name', v), 'pc-name'),
+        roleSelect(p),
+        el('span', { class: 'x del', title: 'Slet', onclick: () => { c.people = c.people.filter((x) => x.id !== p.id); save(); renderCase(); } }, '🗑')),
+      editable('div', p.note, (v) => patch(p, 'note', v), 'pc-note'),
+      el('div', { class: 'pc-events' },
+        el('div', { class: 'muted sm' }, evs.length ? 'Vidne-fil — begivenheder med denne person:' : 'Ingen begivenheder knyttet endnu (knyt via en begivenhed på tidslinjen).'),
+        ...evs.map((e) => el('div', { class: 'pc-ev', onclick: () => { state.tab = 'tidslinje'; state.expanded.add(e.id); state.selEvent = e.id; renderCase(); } },
+          el('span', { class: 'd' }, daDate(e.date)), ' ' + e.title)))));
+  }
+  return wrap;
+}
+
+// ---- Sektion: Frister ----
+function renderFrister(c) {
+  c.deadlines = c.deadlines || [];
+  const wrap = el('div', { class: 'fristview' },
+    el('div', { class: 'pv-bar' },
+      el('button', { class: 'btn primary', onclick: () => { c.deadlines.unshift(newDeadline()); save(); renderCase(); } }, '➕ Tilføj frist'),
+      el('span', { class: 'muted sm' }, 'Rød = overskredet · orange = inden for 7 dage. (Visuelt — der sendes ingen besked.)')));
+  if (!c.deadlines.length) { wrap.append(el('p', { class: 'muted' }, 'Ingen frister endnu.')); return wrap; }
+  for (const d of [...c.deadlines].sort((a, b) => a.date < b.date ? -1 : 1)) {
+    const st = d.done ? 'done' : deadlineStatus(d.date);
+    wrap.append(el('div', { class: 'fristrow ' + st },
+      el('input', d.done ? { type: 'checkbox', checked: 'checked', onchange: (e) => { patch(d, 'done', e.target.checked); renderCase(); } } : { type: 'checkbox', onchange: (e) => { patch(d, 'done', e.target.checked); renderCase(); } }),
+      el('input', { type: 'date', value: d.date, class: 'fdate', onchange: (e) => { patch(d, 'date', e.target.value); renderCase(); } }),
+      editable('div', d.title, (v) => patch(d, 'title', v), 'ftitle'),
+      el('span', { class: 'fstatus' }, d.done ? '✓ Klaret' : st === 'overdue' ? 'Overskredet' : st === 'soon' ? 'Snart' : ''),
+      el('span', { class: 'x del', title: 'Slet', onclick: () => { c.deadlines = c.deadlines.filter((x) => x.id !== d.id); save(); renderCase(); } }, '🗑')));
+  }
+  return wrap;
 }
 
 // ---- Sektion: Søg (med scope-filtre) ----

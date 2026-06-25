@@ -1,5 +1,5 @@
 // Tests på "hjernen" (ren logik i model.js). Kør: node tests/core.test.mjs
-import { sortEvents, insertIndex, newEvent, daDate } from '../src/model.js';
+import { sortEvents, insertIndex, newEvent, daDate, deadlineStatus } from '../src/model.js';
 import assert from 'node:assert/strict';
 
 let n = 0;
@@ -28,5 +28,12 @@ test('newEvent sætter fornuftige defaults', () => {
 });
 
 test('daDate formaterer dansk', () => assert.equal(daDate('2026-06-24'), '24.06.2026'));
+
+test('deadlineStatus farvekoder korrekt', () => {
+  const t = '2026-06-25';
+  assert.equal(deadlineStatus('2026-06-20', t), 'overdue');
+  assert.equal(deadlineStatus('2026-06-28', t), 'soon');     // inden for 7 dage
+  assert.equal(deadlineStatus('2026-08-01', t), 'future');
+});
 
 console.log(`\nAlle ${n} tests grønne ✓`);
