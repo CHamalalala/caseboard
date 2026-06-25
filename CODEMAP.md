@@ -6,13 +6,17 @@ En lille, modulær PWA. Ingen build-step (ren HTML/CSS/JS), så den deployer dir
 |-----|--------|
 | `index.html` | App-skal + registrerer service worker. |
 | `styles.css` | Al styling (CSS-variabler øverst). |
-| `src/app.js` | **Controller**: state, render, alle handlinger (Indsæt, åbn fil, drag→opsummering, eksport/import, seed). Binder alt sammen. |
-| `src/ui.js` | Rene DOM-hjælpere: `el()` element-builder, `insertModal()` (datovælger+felter+fil), `toast()`. Ingen sags-logik. |
-| `src/model.js` | **Hjernen**: skema (`newEvent`, `newSummary`, `newCase`) + ren logik (`sortEvents`, `insertIndex`, `daDate`). Testet. |
-| `src/db.js` | IndexedDB-wrapper: `saveCase/loadCase`, `putFile/getFile/allFiles`, `clearAll`. Data lokalt. |
-| `src/log.js` | ÉN log-kanal (område-tagget). |
-| `src/errors.js` | TYPEDE fejl (`AppError` m. stabil kode). |
-| `manifest.webmanifest`, `sw.js`, `icons/` | PWA: installbar + offline. |
+| `src/app.js` | **Controller**: state (åbne sager + faner), render-router, alle handlinger. Binder alt sammen. Sektioner: `renderOverblik/Tidslinje/Dokumenter/Personer/Frister/Soeg`. |
+| `src/ui.js` | Rene DOM-hjælpere: `el()`, `insertModal()` (datovælger+felter+fil), `toast()`. Ingen sags-logik. |
+| `src/model.js` | **Hjernen**: skema (`newEvent/newSummary/newCase/newPerson/newDeadline`) + ren logik (`sortEvents`, `deadlineStatus`, `fileKind`, `daDate`). Testet. |
+| `src/db.js` | IndexedDB (v2): `cases`-store (multi-sag) + `files` (Blobs **+ udtrukket tekst**) + `app`-state. Migrerer v1. |
+| `src/search.js` | Søgning: MiniSearch + substring-fallback (danske sammensatte ord); scope-filtre; snippet/highlight. |
+| `src/extract.js` | Dokument-tekst: pdf.js (PDF) + fflate (.docx) + tekstfiler → søgbar tekst. Offline. |
+| `src/export.js` | Pakke-eksport (zip via fflate): Bilag/ + `Sagsoversigt.html` + gen-import-json + LÆS-MIG. `overviewHtml` genbruges til Print. |
+| `src/connectors.js` | SVG-streger: valgt opsummering → dens begivenheder (Fase D). |
+| `src/log.js` | ÉN log-kanal. | `src/errors.js` | TYPEDE fejl. |
+| `vendor/` | Lokale (offline) libs: `minisearch`, `fflate`, `pdf.min.js` + `pdf.worker.min.js`. Ingen CDN. |
+| `manifest.webmanifest`, `sw.js`, `icons/` | PWA: installbar + offline. SW = network-first; bump `CACHE` ved hver deploy. |
 | `tests/core.test.mjs` | Tests på kerne-logikken (`node tests/core.test.mjs`). |
 
 **Eksempel/demo:** `loadDemo()` i `app.js` bygger en **fiktiv** demo inline (ingen rigtige data → sikkert at hoste).
