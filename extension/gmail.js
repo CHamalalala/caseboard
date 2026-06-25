@@ -50,14 +50,26 @@
     btn.id = BTN_ID;
     btn.textContent = '📎 Tilføj til sag';
     btn.style.cssText = 'margin-left:12px;vertical-align:middle;background:#14213d;color:#fff;border:0;border-radius:16px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:Arial,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.25);white-space:nowrap';
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation(); e.preventDefault();
-      chrome.runtime.sendMessage({ type: 'add-mail', email: scrape() }, () => {});
-      btn.textContent = '✓ Sendt — vælg sag i CaseBoard';
-      setTimeout(() => { btn.textContent = '📎 Tilføj til sag'; }, 2200);
+      const email = scrape();
+      // interaktiv popup DIREKTE i mailen: vælg sag(er), redigér, søg — ingen fane-skift
+      const r = window.__cbPicker ? await window.__cbPicker.open(email) : { targets: null, email };
+      if (!r) return;                          // annulleret
+      chrome.runtime.sendMessage({ type: 'add-mail', email: r.email, targets: r.targets }, () => {});
+      btn.textContent = '⏳ Tilføjer…';
+      setTimeout(() => { btn.textContent = '📎 Tilføj til sag'; }, 2600);
     });
     subj.appendChild(btn);   // ØVERST — lige efter emnet
   }
+
+  // bekræftelse tilbage fra CaseBoard (skrevet af bridge.js) → vis på knappen, ingen fane-skift
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area !== 'local' || !ch.lastResult || !ch.lastResult.newValue) return;
+    const r = ch.lastResult.newValue; const b = document.getElementById(BTN_ID); if (!b) return;
+    b.textContent = r.ok && (r.titles || []).length ? '✅ Tilføjet til ' + r.titles.map((t) => '«' + t + '»').join(', ') : '⚠️ Kunne ikke tilføje';
+    setTimeout(() => { b.textContent = '📎 Tilføj til sag'; }, 3200);
+  });
 
   new MutationObserver(() => addButton()).observe(document.body, { childList: true, subtree: true });
   addButton();

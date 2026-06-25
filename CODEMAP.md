@@ -17,7 +17,7 @@ En lille, modulær PWA. Ingen build-step (ren HTML/CSS/JS), så den deployer dir
 | `src/summarize.js` | EKSTRAKTIV opsummering (nul hallucination) — nøglepunkter m. boilerplate-filter + længde-modes (kort/normal/lang). |
 | `src/eml.js` | Universal .eml-import (RFC822: encoded-words, QP/base64, multipart, modtage-tid); HTML renses (XSS). |
 | `src/model.js` (jura) | `claims`/`elements` (argumentkort), `claimStrength` (bevisbyrde + kumulativt killswitch + korroboration), `citations`, `DK_FRISTER`+`computeDeadline`. |
-| `extension/` | MV3 browser-udvidelse: "📎 Tilføj til sag" i Gmail → CaseBoard (nonce+origin-valideret `message`-modtager i app.js). |
+| `extension/` | MV3 browser-udvidelse: "📎 Tilføj til sag" i Gmail/Outlook → **interaktiv popup** (`picker.js`, Shadow DOM: vælg sag(er)/multi/ny-sag/redigér/søg) → CaseBoard (nonce+origin-valideret `message`-modtager m. `targets` i app.js). `datefmt.js` (auto-dato), `bridge.js` (synker sags-liste + ack), `background.js` (kø). |
 | `src/log.js` | ÉN log-kanal. | `src/errors.js` | TYPEDE fejl. |
 | `vendor/` | Lokale (offline) libs: `minisearch`, `fflate`, `pdf.min.js` + `pdf.worker.min.js`. Ingen CDN. |
 | `manifest.webmanifest`, `sw.js`, `icons/` | PWA: installbar + offline. SW = network-first; bump `CACHE` ved hver deploy. |

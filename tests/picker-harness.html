@@ -1,0 +1,22 @@
+<!DOCTYPE html><html lang="da"><head><meta charset="utf-8"><title>picker harness</title></head>
+<body style="background:#c9ccd6;height:100vh;margin:0">
+<!-- Test-harness: stubber chrome.storage så vi kan teste extension/picker.js uden for en udvidelse -->
+<script>
+  window.chrome = {
+    storage: {
+      local: {
+        _d: { caseList: [
+          { id: 'a', title: 'Uglebakken 11 – sameje', n: 34 },
+          { id: 'b', title: 'Lejekontrakt tvist', n: 5 },
+          { id: 'c', title: 'Forsikringssag bil', n: 12 },
+        ] },
+        get() { return Promise.resolve(this._d); },
+      },
+      onChanged: { addListener() {} },
+    },
+  };
+</script>
+<script src="/extension/datefmt.js"></script>
+<script src="/extension/picker.js"></script>
+<script>window.openPicker = (email) => window.__cbPicker.open(email);</script>
+</body></html>

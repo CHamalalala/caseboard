@@ -45,7 +45,12 @@ const save = () => { if (!state.case) return Promise.resolve(); state.case.updat
 
 // ---------- navigation ----------
 function renderRoute() { state.view === 'case' ? renderCase() : renderHome(); }
-async function refreshCases() { state.cases = await db.listCases(); }
+async function refreshCases() { state.cases = await db.listCases(); publishCases(); }
+// publicér en LET sags-liste (id+titel+antal) til <html data-cb-cases> → udvidelsens bridge synker den til chrome.storage,
+// så mail-popup'en kan vise sagerne lokalt. KUN id/titel/antal — aldrig sags-indhold; forlader aldrig maskinen.
+function publishCases() {
+  try { document.documentElement.dataset.cbCases = JSON.stringify((state.cases || []).map((c) => ({ id: c.id, title: c.title || '(uden titel)', n: (c.events || []).length }))); } catch (e) { /* ignore */ }
+}
 async function navHome() { state.history = []; state.view = 'home'; state.case = null; state.selEvent = state.selSummary = null; await refreshCases(); renderHome(); }
 async function openCaseById(id) {
   if (state.openCaseObjs[id]) return switchCase(id);                  // allerede åben → bare skift
@@ -876,32 +881,45 @@ function mailCaseModal(mail, cases, activeId) {
   });
 }
 
-// modtag en mail (fra udvidelsen ELLER .eml-drop) → vælg sag → tilføj + synlig bekræftelse.
+// kvittér tilbage til mail-fanen (popup'en) så den kan vise "✅ Tilføjet til X" uden fane-skift.
+function ackMail(ok, titles) { try { window.postMessage({ type: 'caseboard-ack', nonce: MAIL_NONCE, ok: !!ok, titles: titles || [] }, location.origin); } catch (e) { /* ignore */ } }
+
+// modtag en mail (fra udvidelsen ELLER .eml-drop) → tilføj + synlig bekræftelse.
+// targets = {caseIds:[], newCase:bool} fra popup'en i mailen → tilføj DIREKTE (ingen modal). Mangler targets → vis modal (fallback, fx .eml-drop).
 // GLM-review: SERIALISÉR (kø) så to mails ikke racer (lost-update) eller stabler to modaller.
 let _mailQueue = Promise.resolve();
-function receiveMail(mail) { _mailQueue = _mailQueue.then(() => receiveMailNow(mail)).catch(fail); return _mailQueue; }
-async function receiveMailNow(mail) {
+function receiveMail(mail, targets) { _mailQueue = _mailQueue.then(() => receiveMailNow(mail, targets)).catch(fail); return _mailQueue; }
+async function receiveMailNow(mail, targets) {
   await refreshCases();
-  const choice = await mailCaseModal(mail, state.cases, state.activeCaseId);
-  if (!choice) return;
-  // 'new': gem først NÅR mailen er tilføjet → ingen tom-sag-orphan ved fejl (GLM #3)
-  const c = choice === 'new' ? newCase((mail.subject || 'Ny sag').slice(0, 60)) : await db.getCase(choice);
-  if (!c) return;
-  const ev = await addMailEventTo(c, mail);     // gemmer sagen MED mailen
+  const hasTargets = targets && ((Array.isArray(targets.caseIds) && targets.caseIds.length) || targets.newCase);
+  const names = []; let lastCase = null, lastEv = null;
+  if (hasTargets) {
+    for (const id of (targets.caseIds || [])) { const c = await db.getCase(id); if (c) { lastEv = await addMailEventTo(c, mail); lastCase = c; names.push(c.title || 'sag'); } }
+    if (targets.newCase) { const c = newCase((mail.subject || 'Ny sag').slice(0, 60)); lastEv = await addMailEventTo(c, mail); lastCase = c; names.push(c.title || 'sag'); }
+  } else {
+    const choice = await mailCaseModal(mail, state.cases, state.activeCaseId);
+    if (!choice) { ackMail(false, []); return; }
+    // 'new': gem først NÅR mailen er tilføjet → ingen tom-sag-orphan ved fejl (GLM #3)
+    const c = choice === 'new' ? newCase((mail.subject || 'Ny sag').slice(0, 60)) : await db.getCase(choice);
+    if (c) { lastEv = await addMailEventTo(c, mail); lastCase = c; names.push(c.title || 'sag'); }
+  }
+  if (!lastCase) { ackMail(false, []); return; }
   await refreshCases();
-  openCaseObj(c);
-  state.tab = 'tidslinje'; state.expanded = new Set([ev.id]); state.selEvent = ev.id; state.scrollTo = ev.id;
+  openCaseObj(lastCase);
+  state.tab = 'tidslinje'; state.expanded = new Set([lastEv.id]); state.selEvent = lastEv.id; state.scrollTo = lastEv.id;
   renderCase();
-  successBanner('✅ Mail tilføjet til «' + (c.title || 'sag') + '»');
+  successBanner('✅ Mail tilføjet til ' + names.map((n) => '«' + n + '»').join(', '));
+  ackMail(true, names);
 }
 function setupMailReceiver() {
   document.documentElement.dataset.caseboard = '1';      // udvidelsen kan se at CaseBoard er åben
   document.documentElement.dataset.cbNonce = MAIL_NONCE;  // delt hemmelighed (kun læsbar samme-origin)
+  publishCases();                                         // publicér sags-listen med det samme (til mail-popup'en)
   window.addEventListener('message', (e) => {
     if (e.origin !== location.origin) return;
     const d = e.data;
     if (!d || d.type !== 'caseboard-mail' || d.nonce !== MAIL_NONCE || !d.email) return;
-    receiveMail(d.email);
+    receiveMail(d.email, d.targets);
   });
 }
 
