@@ -6,7 +6,16 @@ import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, f
 import { el, toast, insertModal } from './ui.js';
 
 const root = () => document.getElementById('app');
-const state = { view: 'home', case: null, cases: [], history: [], expanded: new Set(), selEvent: null, selSummary: null };
+const state = {
+  view: 'home', case: null, cases: [], history: [],
+  openCaseObjs: {}, openOrder: [], activeCaseId: null, tab: 'overblik',  // faner: åbne sager + sektion
+  expanded: new Set(), selEvent: null, selSummary: null,
+};
+const SECTIONS = [
+  { id: 'overblik', label: 'Overblik', icon: '📋' },
+  { id: 'tidslinje', label: 'Tidslinje', icon: '📅' },
+  { id: 'dokumenter', label: 'Dokumenter', icon: '📎' },
+];
 let _urls = [];                              // aktive blob-URL'er (ryddes ved hver re-render)
 const blobUrl = (blob) => { const u = URL.createObjectURL(blob); _urls.push(u); return u; };
 function revokeUrls() { _urls.forEach((u) => URL.revokeObjectURL(u)); _urls = []; }
@@ -22,8 +31,31 @@ const save = () => { if (!state.case) return Promise.resolve(); state.case.updat
 function renderRoute() { state.view === 'case' ? renderCase() : renderHome(); }
 async function refreshCases() { state.cases = await db.listCases(); }
 async function navHome() { state.history = []; state.view = 'home'; state.case = null; state.selEvent = state.selSummary = null; await refreshCases(); renderHome(); }
-async function openCaseById(id) { const c = await db.getCase(id); if (!c) return toast('Sagen blev ikke fundet', 'warn'); openCaseObj(c); }
-function openCaseObj(c) { state.history.push('home'); state.view = 'case'; state.case = c; state.expanded = new Set(); state.selEvent = state.selSummary = null; renderCase(); }
+async function openCaseById(id) {
+  if (state.openCaseObjs[id]) return switchCase(id);                  // allerede åben → bare skift
+  const c = await db.getCase(id); if (!c) return toast('Sagen blev ikke fundet', 'warn'); openCaseObj(c);
+}
+function openCaseObj(c) {
+  if (!state.openOrder.includes(c.id)) state.openOrder.push(c.id);
+  state.openCaseObjs[c.id] = c;
+  state.activeCaseId = c.id; state.case = c; state.view = 'case'; state.tab = 'overblik';
+  state.expanded = new Set(); state.selEvent = state.selSummary = null;
+  renderCase();
+}
+function switchCase(id) {
+  if (!state.openCaseObjs[id]) return;
+  state.activeCaseId = id; state.case = state.openCaseObjs[id]; state.view = 'case';
+  state.expanded = new Set(); state.selEvent = state.selSummary = null;
+  renderCase();
+}
+function closeCase(id) {
+  delete state.openCaseObjs[id]; state.openOrder = state.openOrder.filter((x) => x !== id);
+  if (state.activeCaseId === id) {
+    const next = state.openOrder[state.openOrder.length - 1];
+    if (next) switchCase(next); else navHome();
+  } else renderCase();
+}
+function setTab(t) { state.tab = t; state.selEvent = state.selSummary = null; renderCase(); }
 function back() { state.history.pop(); navHome(); }
 
 // ---------- sags-handlinger ----------
@@ -250,20 +282,43 @@ function summaryCard(su) {
   return card;
 }
 
+function casetabsStrip() {
+  return el('div', { class: 'casetabs' },
+    el('div', { class: 'casetab homebtn', title: 'Mine sager', onclick: navHome }, '🏠'),
+    ...state.openOrder.map((id) => {
+      const co = state.openCaseObjs[id]; const active = id === state.activeCaseId;
+      return el('div', { class: 'casetab' + (active ? ' active' : ''), onclick: () => switchCase(id) },
+        el('span', { class: 't' }, co?.title || 'Sag'),
+        el('span', { class: 'close', title: 'Luk fane', onclick: (e) => { e.stopPropagation(); closeCase(id); } }, '✕'));
+    }));
+}
+
 function renderCase() {
   revokeUrls();
   const c = state.case;
-  const header = el('header', { class: 'topbar' },
-    el('div', { class: 'nav' },
-      el('button', { class: 'btn nav-btn', onclick: back, title: 'Tilbage' }, '←'),
-      el('button', { class: 'btn nav-btn', onclick: navHome, title: 'Hjem' }, '🏠'),
-      el('button', { class: 'btn nav-btn', onclick: navHome, title: 'Mine sager' }, '🗂 Mine sager')),
-    editable('div', c.title, (v) => patch(c, 'title', v), 'casetitle'),
+  const topbar = el('header', { class: 'topbar' },
+    el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, '⚖️ CaseBoard'),
+    el('div', { class: 'tools' }, el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), openSagBtn('📂 Åbn sag')));
+
+  const casehead = el('div', { class: 'casehead' },
+    editable('div', c.title, (v) => patch(c, 'title', v), 'headtitle'),
     el('div', { class: 'tools' },
       el('button', { class: 'btn primary', onclick: addEventFromModal }, '➕ Indsæt bilag'),
-      el('button', { class: 'btn', onclick: () => { addSummary(); } }, '＋ Opsummering'),
-      el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil (backup / send til en kollega)' }, '💾 Gem sag som fil')));
+      el('button', { class: 'btn', onclick: () => { state.tab = 'tidslinje'; addSummary(); } }, '＋ Opsummering'),
+      el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil' }, '💾 Gem sag')));
 
+  const counts = { tidslinje: c.events.length, dokumenter: caseFileIds(c).length };
+  const sectiontabs = el('div', { class: 'sectiontabs' }, ...SECTIONS.map((s) =>
+    el('div', { class: 'sectiontab' + (state.tab === s.id ? ' active' : ''), onclick: () => setTab(s.id) },
+      s.icon + ' ' + s.label, counts[s.id] != null ? el('span', { class: 'badge' }, String(counts[s.id])) : null)));
+
+  const view = state.tab === 'tidslinje' ? renderTidslinje(c)
+    : state.tab === 'dokumenter' ? renderDokumenter(c) : renderOverblik(c);
+  root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, el('div', { class: 'sectionbody' }, view));
+}
+
+// ---- Sektion: Tidslinje (begivenheder + opsummeringer) ----
+function renderTidslinje(c) {
   const evs = sortEvents(c.events);
   const timeline = el('main', { class: 'timeline' },
     el('div', { class: 'tl-head' }, el('h2', {}, 'Tidslinje'),
@@ -271,8 +326,6 @@ function renderCase() {
         el('button', { class: 'mini-btn', onclick: () => { evs.forEach((e) => state.expanded.add(e.id)); renderCase(); } }, 'Udvid alle'),
         el('button', { class: 'mini-btn', onclick: () => { state.expanded.clear(); renderCase(); } }, 'Fold alle')) : null),
     ...(evs.length ? evs.map(eventCard) : [el('p', { class: 'muted' }, 'Ingen bilag endnu. Tryk “➕ Indsæt bilag” og upload et dokument, en PDF eller et billede.')]));
-
-  // opsummeringer: ankrede øverst (sorteret på dato), derefter resten i deres rækkefølge
   const anchored = c.summaries.filter((s) => s.anchorDate).sort((a, b) => a.anchorDate < b.anchorDate ? -1 : 1);
   const rest = c.summaries.filter((s) => !s.anchorDate);
   const side = el('aside', { class: 'summaries' },
@@ -280,7 +333,44 @@ function renderCase() {
     el('p', { class: 'muted' }, 'Markér en begivenhed → “+” for at føje den til en opsummering. Træk kort for at flytte; ankr til en dato.'),
     ...[...anchored, ...rest].map(summaryCard),
     c.summaries.length ? null : el('p', { class: 'muted' }, 'Ingen endnu — tryk “＋ Opsummering”.'));
-  root().replaceChildren(header, el('div', { class: 'layout' }, timeline, side));
+  return el('div', { class: 'layout' }, timeline, side);
+}
+
+// ---- Sektion: Overblik ----
+function renderOverblik(c) {
+  const evs = sortEvents(c.events);
+  const recent = [...evs].reverse().slice(0, 6);
+  const jump = (tab, fn) => { state.tab = tab; fn && fn(); renderCase(); };
+  return el('div', { class: 'ovgrid' },
+    el('div', { class: 'ovcard' }, el('h3', {}, 'Nøgletal'),
+      el('div', { class: 'ovstat' }, String(c.events.length)), el('div', { class: 'muted' }, 'begivenheder i sagen'),
+      el('div', { class: 'ovrow' }, el('span', {}, 'Dokumenter/bilag'), el('span', { class: 'd' }, String(caseFileIds(c).length))),
+      el('div', { class: 'ovrow' }, el('span', {}, 'Opsummeringer'), el('span', { class: 'd' }, String(c.summaries.length)))),
+    el('div', { class: 'ovcard' }, el('h3', {}, 'Sagsdata'),
+      ...Object.entries(c.meta || {}).map(([k, v]) => el('div', { class: 'ovrow' }, el('span', {}, k), el('span', { class: 'd' }, String(v)))),
+      Object.keys(c.meta || {}).length ? null : el('div', { class: 'muted' }, 'Ingen sagsdata endnu')),
+    el('div', { class: 'ovcard' }, el('h3', {}, 'Emner / opsummeringer'),
+      ...(c.summaries.length ? c.summaries.map((s) => el('div', { class: 'ovrow' },
+        el('span', { class: 'ovlink', onclick: () => jump('tidslinje', () => { state.selSummary = s.id; state.selEvent = null; }) }, s.title || '(uden titel)'),
+        el('span', { class: 'd' }, String(s.links.length)))) : [el('div', { class: 'muted' }, 'Ingen endnu')])),
+    el('div', { class: 'ovcard' }, el('h3', {}, 'Seneste'),
+      ...(recent.length ? recent.map((e) => el('div', { class: 'ovrow' },
+        el('span', { class: 'd' }, daDate(e.date)),
+        el('span', { class: 'ovlink', onclick: () => jump('tidslinje', () => { state.expanded.add(e.id); state.selEvent = e.id; state.selSummary = null; }) }, e.title))) : [el('div', { class: 'muted' }, 'Ingen endnu')])));
+}
+
+// ---- Sektion: Dokumenter ----
+function renderDokumenter(c) {
+  const rows = [];
+  for (const ev of sortEvents(c.events)) for (const a of ev.attachments || []) rows.push({ a, ev });
+  if (!rows.length) return el('div', { class: 'muted' }, 'Ingen dokumenter endnu. Upload via “➕ Indsæt bilag”.');
+  return el('div', { class: 'doclist' }, ...rows.map(({ a, ev }) =>
+    el('div', { class: 'docrow' },
+      el('span', { class: 'ficon' }, kindIcon(fileKind(a.mime, a.name))),
+      el('span', { class: 'docrow-name' }, a.name),
+      el('span', { class: 'docrow-date muted' }, daDate(ev.date)),
+      el('button', { class: 'btn sm', onclick: () => openOriginal(a) }, '🔍 Åbn'),
+      el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(a) }, '⤓ Eksportér'))));
 }
 
 // ---------- migration (v1 -> cases) + boot ----------
