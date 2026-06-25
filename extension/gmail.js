@@ -27,11 +27,20 @@
     };
   }
 
+  // DOMParser-baseret rens (eksekverer IKKE) — fjerner aktive elementer + farlige url-attributter (defense-in-depth)
   function sanitize(html) {
-    const t = document.createElement('div'); t.innerHTML = html;
-    t.querySelectorAll('script,iframe,object,embed,link,meta,style').forEach((n) => n.remove());
-    t.querySelectorAll('*').forEach((n) => [...n.attributes].forEach((a) => { if (/^on/i.test(a.name) || /javascript:/i.test(a.value)) n.removeAttribute(a.name); }));
-    return t.innerHTML.slice(0, 200000);
+    if (!html) return '';
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('script,iframe,object,embed,link,meta,style,base,form,input,button,svg,math').forEach((n) => n.remove());
+      doc.querySelectorAll('*').forEach((n) => [...n.attributes].forEach((a) => {
+        const val = (a.value || '').replace(/[\s -]+/g, '');
+        const isUrlAttr = /^(href|src|xlink:href|formaction|action|srcdoc|background|poster|data)$/i.test(a.name);
+        const badUrl = /^(javascript|vbscript):|data:text\/html/i.test(val);
+        if (/^on/i.test(a.name) || (isUrlAttr && badUrl)) n.removeAttribute(a.name);
+      }));
+      return (doc.body ? doc.body.innerHTML : '').slice(0, 200000);
+    } catch { return ''; }
   }
 
   function addButton() {
