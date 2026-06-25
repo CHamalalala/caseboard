@@ -23,7 +23,7 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .dropnote{margin:16px auto 0;max-width:360px;border:2px dashed #c3cee2;border-radius:10px;padding:14px;color:#7d8aa3;font-size:13px}
 .home.drop-active,.drop-active .dropnote{border-color:#2e7d32;background:#f3faf3;color:#2e7d32}
 /* Hjem / Mine sager */
-.home{max-width:1100px;margin:22px auto;padding:0 16px}
+.home{max-width:min(1900px,96vw);margin:22px auto;padding:0 24px}
 .casegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
 .casecard{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:10px;padding:14px;cursor:pointer;transition:.12s;box-shadow:0 1px 3px rgba(0,0,0,.05)}
 .casecard:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(20,33,61,.12)}
@@ -121,12 +121,12 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .casetab .close:hover{opacity:1;background:rgba(0,0,0,.12)}
 .casetab.homebtn{color:#dce6f7}
 /* sektions-faner (inde i en sag) */
-.sectiontabs{display:flex;gap:4px;max-width:1180px;margin:14px auto 0;padding:0 16px;flex-wrap:wrap}
+.sectiontabs{display:flex;gap:4px;max-width:min(1900px,96vw);margin:14px auto 0;padding:0 24px;flex-wrap:wrap}
 .sectiontab{padding:8px 14px;border-radius:8px 8px 0 0;background:#e7ecf5;color:#33508a;font-weight:600;font-size:13px;cursor:pointer;border:1px solid transparent;border-bottom:none}
 .sectiontab:hover{background:#dde5f2}
 .sectiontab.active{background:#fff;color:var(--navy);border-color:var(--line);box-shadow:0 -2px 6px rgba(0,0,0,.04)}
 .sectiontab .badge{display:inline-block;min-width:18px;text-align:center;background:#c3cee2;color:#22335c;border-radius:9px;font-size:11px;padding:0 5px;margin-left:6px}
-.sectionbody{max-width:1180px;margin:0 auto;padding:14px 16px}
+.sectionbody{max-width:min(1900px,96vw);margin:0 auto;padding:14px 24px}
 /* Overblik */
 .ovgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
 .ovcard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
@@ -137,7 +137,7 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .ovrow .d{color:var(--blue);font-weight:700;white-space:nowrap;margin-right:10px}
 .ovlink{color:var(--blue);cursor:pointer;font-weight:600}.ovlink:hover{text-decoration:underline}
 /* case-hoved (titel + handlinger) */
-.casehead{display:flex;align-items:center;gap:14px;max-width:1180px;margin:0 auto;padding:14px 16px 0}
+.casehead{display:flex;align-items:center;gap:14px;max-width:min(1900px,96vw);margin:0 auto;padding:14px 24px 0}
 .headtitle{font-size:20px;font-weight:800;color:var(--navy);flex:1;min-width:120px;outline:none}
 .sectionbody .layout{max-width:none;margin:8px 0 0;padding:0}
 /* dokument-liste */
@@ -146,7 +146,7 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .docrow-name{flex:1;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .docrow-date{flex:0 0 auto}
 /* ===== søgning ===== */
-.globalsearch{max-width:1100px;margin:0 auto 16px}
+.globalsearch{max-width:min(1900px,96vw);margin:0 auto 16px}
 .searchbar-row{display:flex;align-items:center;gap:8px;background:#fff;border:2px solid var(--line);border-radius:10px;padding:8px 12px}
 .searchbar-row:focus-within{border-color:var(--blue)}
 .searchbar-row.big{padding:12px 16px;box-shadow:0 2px 10px rgba(20,33,61,.06)}
@@ -210,7 +210,7 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .ro{cursor:default}
 body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}
 /* ===== v4 Fase F: frit lærred + farvede tråde ===== */
-.sectionbody .layout{grid-template-columns:1fr 460px}
+.sectionbody .layout{grid-template-columns:1fr minmax(440px,40vw)}
 @media(max-width:900px){.sectionbody .layout{grid-template-columns:1fr}}
 .canvas{position:relative;background:#fbfcff;border:1px dashed #d3dcec;border-radius:10px;overflow:visible;min-width:300px}
 .canvas-hint{font-size:12px;color:#5b6678;padding:8px 12px;position:sticky;top:0}
@@ -238,6 +238,9 @@ body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}
 .ai-label{font-size:11px;color:#7a4ec0;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
 .ai-text{font-size:13px;color:#2a2342;white-space:pre-wrap;line-height:1.45}
 .ai-apply{margin-top:8px}
+.ai-len{display:flex;align-items:center;gap:6px;margin:2px 0 4px}
+.lenchip{font-size:11px;font-weight:600;background:#efeaf9;border:1px solid #d8cdf0;color:#5a3ea0;border-radius:10px;padding:1px 9px;cursor:pointer;text-transform:capitalize}
+.lenchip.on{background:#7a4ec0;color:#fff;border-color:#7a4ec0}
 .ai-points{margin:6px 0 0;padding-left:20px}
 .ai-points li{font-size:13px;color:#2a2342;line-height:1.5;margin-bottom:4px}
 /* spring-til-begivenhed highlight (J3) */

@@ -8,7 +8,7 @@ import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './
 import { buildShareZip, overviewHtml } from './export.js';
 import { drawConnectors, clearConnectors } from './connectors.js';
 import { extractText } from './extract.js';
-import { keyPoints, suggestHeading } from './summarize.js';
+import { keyPoints, suggestHeading, SUMMARY_MODES } from './summarize.js';
 import { parseEml } from './eml.js';
 
 const root = () => document.getElementById('app');
@@ -127,18 +127,21 @@ async function eventText(ev) {
   for (const a of ev.attachments || []) { const rec = await db.getFile(a.fileId); if (rec && rec.text) parts.push(rec.text); }
   return parts.join('\n');
 }
-function renderAi(box, ev, label, content, isHeading) {
-  const isPoints = Array.isArray(content);
-  const has = isPoints ? content.length : !!content;
-  const body = isPoints
-    ? (content.length ? el('ul', { class: 'ai-points' }, ...content.map((p) => el('li', {}, p))) : el('div', { class: 'ai-text muted' }, '(ingen tekst at opsummere — tilføj en note eller indeksér dokumentet)'))
-    : el('div', { class: 'ai-text' }, content || '(ingen tekst endnu)');
+// nøglepunkter med længde-vælger (kort/normal/lang) — re-kører på samme kilde-tekst
+function renderAiSummary(box, ev, txt, mode) {
+  const pts = keyPoints(txt, mode);
   box.replaceChildren(
-    el('div', { class: 'ai-label' }, '✨ ' + label + ' — uddrag, ingen ny tekst'),
-    body,
-    has ? el('div', { class: 'ai-apply' }, isHeading
-      ? el('button', { class: 'btn sm', onclick: () => { patch(ev, 'title', content); renderCase(); } }, '🏷 Brug som overskrift')
-      : el('button', { class: 'btn sm', onclick: () => { ev.body = (ev.body ? ev.body + '\n\n' : '') + content.map((p) => '• ' + p).join('\n'); save(); renderCase(); } }, '📋 Indsæt i note')) : null);
+    el('div', { class: 'ai-label' }, '✨ Nøglepunkter — uddrag, ingen ny tekst'),
+    el('div', { class: 'ai-len' }, el('span', { class: 'muted sm' }, 'Længde:'),
+      ...SUMMARY_MODES.map((m) => el('span', { class: 'lenchip' + (m === mode ? ' on' : ''), onclick: () => renderAiSummary(box, ev, txt, m) }, m))),
+    pts.length ? el('ul', { class: 'ai-points' }, ...pts.map((p) => el('li', {}, p))) : el('div', { class: 'ai-text muted' }, '(ingen tekst at opsummere — tilføj en note eller indeksér dokumentet)'),
+    pts.length ? el('div', { class: 'ai-apply' }, el('button', { class: 'btn sm', onclick: () => { ev.body = (ev.body ? ev.body + '\n\n' : '') + pts.map((p) => '• ' + p).join('\n'); save(); renderCase(); } }, '📋 Indsæt i note')) : null);
+}
+function renderAiHeading(box, ev, heading) {
+  box.replaceChildren(
+    el('div', { class: 'ai-label' }, '✨ Foreslået overskrift — uddrag, ingen ny tekst'),
+    el('div', { class: 'ai-text' }, heading || '(ingen tekst endnu)'),
+    heading ? el('div', { class: 'ai-apply' }, el('button', { class: 'btn sm', onclick: () => { patch(ev, 'title', heading); renderCase(); } }, '🏷 Brug som overskrift')) : null);
 }
 
 function patch(obj, key, val) { obj[key] = val; save(); }
@@ -346,8 +349,8 @@ function eventCard(ev) {
     // ✨ ekstraktiv AI (offline, deterministisk, ingen hallucination)
     const aiBox = el('div', { class: 'aibox' });
     body.append(el('div', { class: 'ai-actions' },
-      el('button', { class: 'btn ghost sm', onclick: async () => { aiBox.replaceChildren(el('span', { class: 'muted sm' }, 'Læser tekst …')); renderAi(aiBox, ev, 'Nøglepunkter', keyPoints(await eventText(ev), 4)); } }, '✨ Opsummér (nøglepunkter)'),
-      el('button', { class: 'btn ghost sm', onclick: async () => { renderAi(aiBox, ev, 'Foreslået overskrift', suggestHeading(await eventText(ev)), true); } }, '✨ Foreslå overskrift')),
+      el('button', { class: 'btn ghost sm', onclick: async () => { aiBox.replaceChildren(el('span', { class: 'muted sm' }, 'Læser tekst …')); renderAiSummary(aiBox, ev, await eventText(ev), 'normal'); } }, '✨ Opsummér (nøglepunkter)'),
+      el('button', { class: 'btn ghost sm', onclick: async () => { renderAiHeading(aiBox, ev, suggestHeading(await eventText(ev))); } }, '✨ Foreslå overskrift')),
       aiBox);
     card.append(body);
   }
