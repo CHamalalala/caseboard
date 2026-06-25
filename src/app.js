@@ -78,6 +78,15 @@ function closeCase(id) {
   } else renderCase();
 }
 function setTab(t) { state.tab = t; state.selEvent = state.selSummary = null; renderCase(); }
+// 🔄 genindlæs ALT fra IndexedDB (fanger fx mails tilføjet i en baggrunds-fane via udvidelsen) + gen-render
+async function refreshAll() {
+  await refreshCases();
+  if (state.view === 'case' && state.case) {
+    const c = await db.getCase(state.case.id);
+    if (c) { state.openCaseObjs[c.id] = c; state.case = c; renderCase(); } else { await navHome(); }
+  } else { renderHome(); }
+  toast('Opdateret', 'ok');
+}
 function back() { state.history.pop(); navHome(); }
 
 // ---------- sags-handlinger ----------
@@ -260,7 +269,7 @@ function renderHome() {
   const header = el('header', { class: 'topbar' },
     el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, '⚖️ CaseBoard'),
     el('div', { class: 'casetitle' }, 'Mine sager'),
-    el('div', { class: 'tools' }, el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), openSagBtn('📂 Åbn sag')));
+    el('div', { class: 'tools' }, el('button', { class: 'btn ghost', onclick: refreshAll, title: 'Genindlæs (henter bl.a. mails tilføjet i baggrunden)' }, '🔄 Opdatér'), el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), openSagBtn('📂 Åbn sag')));
   const body = el('div', { class: 'home' });
   if (!state.cases.length) {
     body.append(el('div', { class: 'empty' },
@@ -286,19 +295,31 @@ function renderHome() {
 }
 
 // ---------- "+ Tilføj til opsummering"-popover ----------
+// placér en popover INDEN FOR viewporten: append → mål → flip opad hvis ikke plads nedad, klamp begge akser
+// (.popover har max-height+overflow i CSS, så lange lister scroller frem for at flyde ud over skærmen). Esc lukker.
+function placePopover(pop, anchorEl) {
+  document.body.append(pop);                       // append først → kan måles
+  const r = anchorEl.getBoundingClientRect();
+  const h = pop.offsetHeight, w = pop.offsetWidth, m = 8;
+  let top = r.bottom + 4;
+  if (top + h > innerHeight - m) { const above = r.top - h - 4; top = above >= m ? above : Math.max(m, innerHeight - h - m); }
+  const left = Math.max(m, Math.min(r.left, innerWidth - w - m));
+  pop.style.top = Math.round(top) + 'px';
+  pop.style.left = Math.round(left) + 'px';
+  const close = (e) => { if (e.type === 'keydown' ? e.key === 'Escape' : (!pop.contains(e.target) && e.target !== anchorEl)) { pop.remove(); document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close, true); } };
+  setTimeout(() => { document.addEventListener('mousedown', close); document.addEventListener('keydown', close, true); }, 0);
+  return pop;
+}
 function summaryPopover(anchorEl, ev) {
   document.querySelector('.popover')?.remove();
-  const r = anchorEl.getBoundingClientRect();
   const inSet = new Set(summariesForEvent(ev.id).map((s) => s.id));
-  const pop = el('div', { class: 'popover', style: `top:${Math.round(r.bottom + 4)}px; left:${Math.round(Math.min(r.left, innerWidth - 250))}px` },
+  const pop = el('div', { class: 'popover' },
     el('div', { class: 'po-head' }, 'Føj til opsummering'),
     ...(state.case.summaries.length ? state.case.summaries.map((s) =>
       el('div', { class: 'po-item' + (inSet.has(s.id) ? ' on' : ''), onclick: () => { linkEventToSummary(s.id, ev); pop.remove(); } },
         (inSet.has(s.id) ? '✓ ' : '＋ ') + (s.title || '(uden titel)'))) : [el('div', { class: 'po-empty' }, 'Ingen endnu')]),
     el('div', { class: 'po-item new', onclick: () => { const s = addSummary(); linkEventToSummary(s.id, ev); } }, '✚ Ny opsummering'));
-  const close = (e) => { if (!pop.contains(e.target) && e.target !== anchorEl) { pop.remove(); document.removeEventListener('mousedown', close); } };
-  setTimeout(() => document.addEventListener('mousedown', close), 0);
-  document.body.append(pop);
+  placePopover(pop, anchorEl);
 }
 
 // ---------- SAGS-DETALJE: tidslinje-fane (sammenklappelig, dokument-baseret) ----------
@@ -459,7 +480,7 @@ function renderCase() {
   document.body.classList.toggle('editing', !!state.editMode);
   const topbar = el('header', { class: 'topbar' },
     el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, '⚖️ CaseBoard'),
-    el('div', { class: 'tools' }, el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), openSagBtn('📂 Åbn sag')));
+    el('div', { class: 'tools' }, el('button', { class: 'btn ghost', onclick: refreshAll, title: 'Genindlæs (henter bl.a. mails tilføjet i baggrunden)' }, '🔄 Opdatér'), el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), openSagBtn('📂 Åbn sag')));
 
   const casehead = el('div', { class: 'casehead' },
     editable('div', c.title, (v) => patch(c, 'title', v), 'headtitle', true),
@@ -643,7 +664,6 @@ const evLabel = (c, refId) => {
 function gotoRef(c, refId) { const ct = (c.citations || []).find((x) => x.id === refId); gotoEvent(ct ? ct.eventId : refId); }
 function eventPickerPopover(anchorEl, c, onPick) {
   document.querySelector('.popover')?.remove();
-  const r = anchorEl.getBoundingClientRect();
   const evs = sortEvents(c.events);
   const items = [el('div', { class: 'po-head' }, 'Begivenheder'),
     ...(evs.length ? evs.map((e) => el('div', { class: 'po-item', onclick: () => { onPick(e.id); document.querySelector('.popover')?.remove(); } }, daDate(e.date) + ' — ' + e.title)) : [el('div', { class: 'po-empty' }, 'Ingen begivenheder')])];
@@ -651,10 +671,8 @@ function eventPickerPopover(anchorEl, c, onPick) {
     items.push(el('div', { class: 'po-head' }, 'Citater'));
     for (const ct of c.citations) items.push(el('div', { class: 'po-item', onclick: () => { onPick(ct.id); document.querySelector('.popover')?.remove(); } }, '« ' + ct.quote.slice(0, 44) + (ct.quote.length > 44 ? '…' : '') + ' »'));
   }
-  const pop = el('div', { class: 'popover', style: `top:${Math.round(r.bottom + 4)}px;left:${Math.round(Math.min(r.left, innerWidth - 280))}px;max-height:340px;overflow:auto` }, ...items);
-  const close = (e) => { if (!pop.contains(e.target) && e.target !== anchorEl) { pop.remove(); document.removeEventListener('mousedown', close); } };
-  setTimeout(() => document.addEventListener('mousedown', close), 0);
-  document.body.append(pop);
+  const pop = el('div', { class: 'popover' }, ...items);
+  placePopover(pop, anchorEl);
 }
 function strengthBar(st) {
   return el('div', { class: 'strengthbar', title: `Sagsstyrke: ${st.label}${st.gaps ? ` · ${st.gaps} hul(ler)` : ''}` },
