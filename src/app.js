@@ -5,6 +5,7 @@ import * as db from './db.js';
 import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon } from './model.js';
 import { el, toast, insertModal } from './ui.js';
 import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
+import { buildShareZip } from './export.js';
 
 const root = () => document.getElementById('app');
 const state = {
@@ -115,6 +116,22 @@ async function exportCaseObj(c) {
   } catch (e) { fail(Err.export('eksport fejlede', e)); }
 }
 async function exportCaseById(id) { const c = await db.getCase(id); if (c) exportCaseObj(c); }
+// Eksportér som DELBAR PAKKE (zip: mappe m. Bilag/ + læsbar oversigt + gen-import-fil)
+async function exportShare(c) {
+  try {
+    toast('Pakker sagen til deling …');
+    const fileRecs = {}, filesJson = {};
+    for (const fid of caseFileIds(c)) {
+      const rec = await db.getFile(fid); if (!rec) continue;
+      fileRecs[fid] = { name: rec.name, mime: rec.mime, bytes: new Uint8Array(await rec.blob.arrayBuffer()) };
+      filesJson[fid] = { name: rec.name, mime: rec.mime, b64: await blobToB64(rec.blob) };
+    }
+    const jsonString = JSON.stringify({ app: 'caseboard', exported: new Date().toISOString(), case: c, files: filesJson });
+    const { folder, bytes } = buildShareZip(c, fileRecs, jsonString);
+    el('a', { href: blobUrl(new Blob([bytes], { type: 'application/zip' })), download: folder + '.zip' }).click();
+    toast('Pakke klar: ' + folder + '.zip — udpak og del mappen', 'ok');
+  } catch (e) { fail(Err.export('pakke-eksport fejlede', e)); }
+}
 async function importData(data) {
   if (!data || !data.case) throw Err.import('ikke en gyldig CaseBoard-fil');
   const c = data.case; c.id = uid('case'); c.updated = Date.now();
@@ -307,7 +324,8 @@ function renderCase() {
     el('div', { class: 'tools' },
       el('button', { class: 'btn primary', onclick: addEventFromModal }, '➕ Indsæt bilag'),
       el('button', { class: 'btn', onclick: () => { state.tab = 'tidslinje'; addSummary(); } }, '＋ Opsummering'),
-      el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil' }, '💾 Gem sag')));
+      el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil (til backup / gen-import)' }, '💾 Gem sag'),
+      el('button', { class: 'btn ghost', onclick: () => exportShare(c), title: 'Pak sagen som en mappe (Bilag + læsbar oversigt) — nem at dele med en kollega' }, '📦 Del')));
 
   const counts = { tidslinje: c.events.length, dokumenter: caseFileIds(c).length };
   const sectiontabs = el('div', { class: 'sectiontabs' }, ...SECTIONS.map((s) =>
