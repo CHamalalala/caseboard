@@ -27,6 +27,24 @@ export function newEvent(p = {}) {
   };
 }
 
+// Argumentkort: påstand → beviskrav (retsfaktum) → bevis. Deterministisk hul-detektion.
+export function newClaim(title = 'Ny påstand', i = 0) { return { id: uid('cl'), title, color: SUMMARY_COLORS[i % SUMMARY_COLORS.length], elements: [] }; }
+export function newElement(text = '') { return { id: uid('el'), text: text || 'Nyt beviskrav', evidence: [], objection: '', rebuttal: '' }; }
+// sagsstyrke pr. påstand: dækning × bevis-styrke (urateret bevis = middel/3). Returnerer score 0–1, antal huller, label.
+export function claimStrength(claim, events) {
+  const els = (claim && claim.elements) || [];
+  if (!els.length) return { score: 0, gaps: 0, label: 'tom' };
+  const byId = {}; for (const e of events || []) byId[e.id] = e;
+  let sum = 0, gaps = 0;
+  for (const el of els) {
+    const ev = (el.evidence || []).map((id) => byId[id]).filter(Boolean);
+    if (!ev.length) { gaps++; continue; }
+    sum += Math.max(...ev.map((e) => e.strength || 3)) / 5;
+  }
+  const score = sum / els.length;
+  return { score, gaps, label: score >= 0.7 ? 'stærk' : score >= 0.4 ? 'middel' : 'svag' };
+}
+
 export const ROLES = ['Klient', 'Modpart', 'Vidne', 'Advokat', 'Dommer', 'Andet'];
 // DK frist-motor — vejledende danske procesfrister (advokat verificerer altid; ikke juridisk rådgivning)
 export const DK_FRISTER = [
