@@ -1,5 +1,5 @@
 // Tests på "hjernen" (ren logik i model.js). Kør: node tests/core.test.mjs
-import { sortEvents, insertIndex, newEvent, daDate, deadlineStatus, sumMinutes, fmtMinutes, toHours, computeDeadline } from '../src/model.js';
+import { sortEvents, insertIndex, newEvent, daDate, deadlineStatus, sumMinutes, fmtMinutes, toHours, computeDeadline, claimStrength } from '../src/model.js';
 import { extractiveSummary, suggestHeading } from '../src/summarize.js';
 import assert from 'node:assert/strict';
 
@@ -58,6 +58,19 @@ test('ekstraktiv opsummering opfinder ALDRIG ny tekst (nul hallucination)', () =
 test('DK frist-motor: ankefrist 4 uger + weekend-rul', () => {
   assert.equal(computeDeadline('2026-06-25', 28), '2026-07-23');     // 4 uger frem, hverdag
   assert.equal(computeDeadline('2026-07-25', 0), '2026-07-27');      // lørdag → ruller til mandag
+});
+
+test('claimStrength: bevisbyrde + kritisk hul + korroboration (GLM-jurist)', () => {
+  const events = [{ id: 'e1', strength: 2 }, { id: 'e2', strength: 2 }, { id: 'e3', strength: 5 }];
+  // afgørende krav (min byrde) uden bevis → kritisk hul
+  const c1 = claimStrength({ elements: [{ evidence: [], burden: 'mig', essential: true }, { evidence: ['e3'], burden: 'mig', essential: true }] }, events);
+  assert.equal(c1.critical, true); assert.equal(c1.label, 'kritisk hul');
+  // samme hul, men modparten har bevisbyrden → IKKE kritisk
+  assert.equal(claimStrength({ elements: [{ evidence: [], burden: 'modpart', essential: true }] }, events).critical, false);
+  // korroboration: to svage beviser scorer højere end ét
+  const a = claimStrength({ elements: [{ evidence: ['e1'], burden: 'mig' }] }, events).score;
+  const b = claimStrength({ elements: [{ evidence: ['e1', 'e2'], burden: 'mig' }] }, events).score;
+  assert.ok(b > a, 'korroboration skal løfte scoren');
 });
 
 console.log(`\nAlle ${n} tests grønne ✓`);

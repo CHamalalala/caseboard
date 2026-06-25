@@ -257,7 +257,13 @@ body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}
 .claim-title{font-size:17px;font-weight:800;color:var(--navy);flex:1;outline:none}
 .element{position:relative;background:#f7f9fd;border:1px solid #e6ebf4;border-radius:8px;padding:10px 12px;margin:10px 0;display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:760px){.element{grid-template-columns:1fr}}
-.element.gap{background:#fdf3f2;border-color:#f3c9c2}
+.element.st-hul{background:#fdf3f2;border-color:#f3c9c2}
+.element.st-modpart{background:#f3faf3;border-color:#cfe3cf}
+.el-meta{display:flex;gap:10px;align-items:center;margin:4px 0 8px;flex-wrap:wrap}
+.burden-toggle{font-size:11px;cursor:pointer;background:#eef2fa;border:1px solid #d6e0f2;border-radius:10px;padding:1px 9px;font-weight:600;user-select:none}
+.ess-toggle{font-size:11px;color:#6b7280;cursor:pointer;display:flex;align-items:center;gap:3px}
+.opp-flag{font-size:12px;font-weight:700;color:#2e7d32}
+.sb-fill.str-kritisk,.str-kritisk .sb-fill{background:#a01515}.sb-label.str-kritisk,.str-kritisk.sb-label{color:#a01515}
 .el-text{font-weight:600;color:var(--navy);outline:none;margin-bottom:8px}
 .el-ev{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .ev-chip{background:#eaf3ea;border:1px solid #cfe3cf;color:#2e5a2c;cursor:pointer}
@@ -276,3 +282,13 @@ body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}
 .str-middel .sb-fill,.sb-fill.str-middel{background:#e08a00}.str-middel.sb-label,.sb-label.str-middel{color:#e08a00}
 .str-stærk .sb-fill,.sb-fill.str-stærk{background:#2e7d32}.str-stærk.sb-label,.sb-label.str-stærk{color:#2e7d32}
 .sb-label.str-tom{color:#9aa3b2}
+/* K3 citater */
+.cit-block{margin:8px 0;padding:8px 10px;background:#fffdf5;border:1px solid #f0e6c8;border-radius:8px}
+.cit-h{margin-bottom:4px}
+.citrow{display:flex;align-items:baseline;gap:8px;font-size:13px;margin:3px 0}
+.cit-q{color:#5a4a1f;font-style:italic}
+.cit-pg{font-size:11px;color:#8a7320;font-weight:700;white-space:nowrap}
+.citrow .x{cursor:pointer;color:#c0560f}
+.cit-add{display:flex;gap:6px;align-items:flex-start;margin-top:6px}
+.cit-input{flex:1;border:1px solid #e0d5b0;border-radius:6px;padding:5px 8px;font-size:13px;font-family:inherit;resize:vertical}
+.cit-page{width:54px;border:1px solid #e0d5b0;border-radius:6px;padding:5px 6px;font-size:13px;font-family:inherit}

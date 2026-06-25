@@ -2,7 +2,7 @@
 import { log } from './log.js';
 import { Err, AppError } from './errors.js';
 import * as db from './db.js';
-import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon, ROLES, newPerson, newDeadline, deadlineStatus, SUMMARY_COLORS, newTimeEntry, sumMinutes, fmtMinutes, toHours, DK_FRISTER, computeDeadline, newClaim, newElement, claimStrength } from './model.js';
+import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon, ROLES, newPerson, newDeadline, deadlineStatus, SUMMARY_COLORS, newTimeEntry, sumMinutes, fmtMinutes, toHours, DK_FRISTER, computeDeadline, newClaim, newElement, claimStrength, newCitation, elementStatus } from './model.js';
 import { el, toast, insertModal } from './ui.js';
 import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
 import { buildShareZip, overviewHtml } from './export.js';
@@ -146,6 +146,16 @@ function renderAiHeading(box, ev, heading) {
 }
 
 function patch(obj, key, val) { obj[key] = val; save(); }
+
+// fjern "døde" referencer til en slettet begivenhed (argumenter-bevis, opsummerings-links, citater) — GLM-review
+function cleanupRefs(evId) {
+  const c = state.case; if (!c) return;
+  for (const cl of c.claims || []) for (const elx of cl.elements || []) elx.evidence = (elx.evidence || []).filter((x) => x !== evId);
+  for (const s of c.summaries || []) s.links = (s.links || []).filter((l) => l.refId !== evId);
+  const deadCits = (c.citations || []).filter((ct) => ct.eventId === evId).map((ct) => ct.id);
+  c.citations = (c.citations || []).filter((ct) => ct.eventId !== evId);
+  if (deadCits.length) for (const cl of c.claims || []) for (const elx of cl.elements || []) elx.evidence = (elx.evidence || []).filter((x) => !deadCits.includes(x));
+}
 function addSummary() { const s = newSummary('Ny opsummering', state.case.summaries.length); state.case.summaries.unshift(s); save(); renderCase(); return s; }
 function linkEventToSummary(summaryId, ev) {
   const s = state.case.summaries.find((x) => x.id === summaryId); if (!s) return;
@@ -312,7 +322,7 @@ function eventCard(ev) {
     editable('span', ev.title, (v) => patch(ev, 'title', v), 'title', true),
     ev.strength ? el('span', { class: 'str-badge', title: 'Bevis-styrke ' + ev.strength + '/5' }, '💪' + ev.strength) : null,
     el('button', { class: 'plus-btn', title: 'Føj til opsummering', onclick: (e) => { e.stopPropagation(); summaryPopover(e.currentTarget, ev); } }, '＋'),
-    el('button', { class: 'mini del', title: 'Slet', onclick: (e) => { e.stopPropagation(); state.case.events = state.case.events.filter((x) => x.id !== ev.id); save(); renderCase(); } }, '✕'));
+    el('button', { class: 'mini del', title: 'Slet', onclick: (e) => { e.stopPropagation(); state.case.events = state.case.events.filter((x) => x.id !== ev.id); cleanupRefs(ev.id); save(); renderCase(); } }, '✕'));
 
   const card = el('div', { class: cls, dataset: { id: ev.id } }, head);
   // tags: hvilke opsummeringer er begivenheden i
@@ -333,6 +343,17 @@ function eventCard(ev) {
         el('button', { class: 'btn sm', onclick: () => openOriginal(att) }, '🔍 Åbn original'),
         el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(att) }, '⤓ Eksportér bilag'),
         el('span', { class: 'doc-name muted' }, att.name)));
+      // 📌 citater (uddrag som bevis) — kan knyttes til et beviskrav i Argumenter
+      const cits = (state.case.citations || []).filter((ct) => ct.eventId === ev.id);
+      const citBlock = el('div', { class: 'cit-block' }, el('div', { class: 'cit-h muted sm' }, '📌 Citater (uddrag som bevis):'),
+        ...cits.map((ct) => el('div', { class: 'citrow' }, el('span', { class: 'cit-q' }, '« ' + ct.quote + ' »'),
+          ct.page ? el('span', { class: 'cit-pg' }, 's. ' + ct.page) : null,
+          el('b', { class: 'x', title: 'Fjern', onclick: () => { state.case.citations = state.case.citations.filter((x) => x.id !== ct.id); save(); renderCase(); } }, ' ✕'))));
+      const qIn = el('textarea', { class: 'cit-input', rows: '2', placeholder: 'Indsæt et uddrag fra dokumentet (markér i “Åbn original” → kopiér ind)' });
+      const pIn = el('input', { class: 'cit-page', placeholder: 'side' });
+      citBlock.append(el('div', { class: 'cit-add' }, qIn, pIn,
+        el('button', { class: 'btn sm', onclick: () => { const q = qIn.value.trim(); if (!q) return; state.case.citations = state.case.citations || []; state.case.citations.push(newCitation({ eventId: ev.id, fileId: att.fileId, page: pIn.value.trim(), quote: q })); save(); renderCase(); } }, '📌 Pin citat')));
+      body.append(citBlock);
     }
     if (ev.parties) body.append(el('div', { class: 'parties' }, ev.parties));
     body.append(el('div', { class: 'note-label muted' }, 'Note (din — dokumentet kan ikke ændres):'),
@@ -596,14 +617,24 @@ function printChronology(c) {
 }
 
 // ---- Sektion: Argumenter (påstand → beviskrav → bevis-huller) ----
-const evLabel = (c, refId) => { const e = (c.events || []).find((x) => x.id === refId); return e ? daDate(e.date) + ' — ' + e.title : '(slettet)'; };
+const evLabel = (c, refId) => {
+  const e = (c.events || []).find((x) => x.id === refId); if (e) return daDate(e.date) + ' — ' + e.title;
+  const ct = (c.citations || []).find((x) => x.id === refId);
+  if (ct) return '« ' + ct.quote.slice(0, 50) + (ct.quote.length > 50 ? '…' : '') + ' »' + (ct.page ? ' (s.' + ct.page + ')' : '');
+  return '(slettet)';
+};
+function gotoRef(c, refId) { const ct = (c.citations || []).find((x) => x.id === refId); gotoEvent(ct ? ct.eventId : refId); }
 function eventPickerPopover(anchorEl, c, onPick) {
   document.querySelector('.popover')?.remove();
   const r = anchorEl.getBoundingClientRect();
   const evs = sortEvents(c.events);
-  const pop = el('div', { class: 'popover', style: `top:${Math.round(r.bottom + 4)}px;left:${Math.round(Math.min(r.left, innerWidth - 280))}px;max-height:320px;overflow:auto` },
-    el('div', { class: 'po-head' }, 'Knyt bevis (begivenhed)'),
-    ...(evs.length ? evs.map((e) => el('div', { class: 'po-item', onclick: () => { onPick(e.id); pop.remove(); } }, daDate(e.date) + ' — ' + e.title)) : [el('div', { class: 'po-empty' }, 'Ingen begivenheder')]));
+  const items = [el('div', { class: 'po-head' }, 'Begivenheder'),
+    ...(evs.length ? evs.map((e) => el('div', { class: 'po-item', onclick: () => { onPick(e.id); document.querySelector('.popover')?.remove(); } }, daDate(e.date) + ' — ' + e.title)) : [el('div', { class: 'po-empty' }, 'Ingen begivenheder')])];
+  if ((c.citations || []).length) {
+    items.push(el('div', { class: 'po-head' }, 'Citater'));
+    for (const ct of c.citations) items.push(el('div', { class: 'po-item', onclick: () => { onPick(ct.id); document.querySelector('.popover')?.remove(); } }, '« ' + ct.quote.slice(0, 44) + (ct.quote.length > 44 ? '…' : '') + ' »'));
+  }
+  const pop = el('div', { class: 'popover', style: `top:${Math.round(r.bottom + 4)}px;left:${Math.round(Math.min(r.left, innerWidth - 280))}px;max-height:340px;overflow:auto` }, ...items);
   const close = (e) => { if (!pop.contains(e.target) && e.target !== anchorEl) { pop.remove(); document.removeEventListener('mousedown', close); } };
   setTimeout(() => document.addEventListener('mousedown', close), 0);
   document.body.append(pop);
@@ -625,19 +656,24 @@ function renderArgumenter(c) {
     const card = el('div', { class: 'claimcard', style: `border-left-color:${claim.color}` },
       el('div', { class: 'claim-head' },
         editable('div', claim.title, (v) => patch(claim, 'title', v), 'claim-title'),
-        strengthBar(claimStrength(claim, c.events)),
+        strengthBar(claimStrength(claim, c.events, c.citations)),
         el('span', { class: 'x del', title: 'Slet påstand', onclick: () => { c.claims = c.claims.filter((x) => x.id !== claim.id); save(); renderCase(); } }, '🗑')));
     for (const elx of claim.elements) {
-      const hasEv = (elx.evidence || []).length > 0;
-      card.append(el('div', { class: 'element' + (hasEv ? '' : ' gap') },
+      const status = elementStatus(elx);   // 'ok' | 'hul' | 'modpart'
+      const essChk = (e) => { patch(elx, 'essential', e.target.checked); renderCase(); };
+      card.append(el('div', { class: 'element st-' + status },
         el('span', { class: 'x del el-del', title: 'Slet beviskrav', onclick: () => { claim.elements = claim.elements.filter((x) => x.id !== elx.id); save(); renderCase(); } }, '🗑'),
         el('div', { class: 'el-main' },
           editable('div', elx.text, (v) => patch(elx, 'text', v), 'el-text'),
+          el('div', { class: 'el-meta' },
+            el('span', { class: 'burden-toggle', title: 'Hvem har bevisbyrden? Et hul er kun en trussel hvis DU har byrden.', onclick: () => { patch(elx, 'burden', (elx.burden || 'mig') === 'mig' ? 'modpart' : 'mig'); renderCase(); } }, 'Bevisbyrde: ' + ((elx.burden || 'mig') === 'mig' ? '🟦 mig' : '🟧 modpart')),
+            el('label', { class: 'ess-toggle', title: 'Afgørende (kumulativt) krav — ét sådant hul gør påstanden død' },
+              el('input', elx.essential !== false ? { type: 'checkbox', checked: 'checked', onchange: essChk } : { type: 'checkbox', onchange: essChk }), ' afgørende')),
           el('div', { class: 'el-ev' },
-            ...(elx.evidence || []).map((refId) => el('span', { class: 'chip ev-chip', onclick: () => gotoEvent(refId) }, evLabel(c, refId),
+            ...(elx.evidence || []).map((refId) => el('span', { class: 'chip ev-chip', onclick: () => gotoRef(c, refId) }, evLabel(c, refId),
               el('b', { class: 'x', onclick: (e) => { e.stopPropagation(); elx.evidence = elx.evidence.filter((x) => x !== refId); save(); renderCase(); } }, ' ✕'))),
             el('button', { class: 'plus-btn', title: 'Knyt bevis', onclick: (e) => { e.stopPropagation(); eventPickerPopover(e.currentTarget, c, (id) => { if (!elx.evidence.includes(id)) { elx.evidence.push(id); save(); renderCase(); } }); } }, '＋'),
-            hasEv ? null : el('span', { class: 'gap-flag' }, '⚠ mangler bevis'))),
+            status === 'hul' ? el('span', { class: 'gap-flag' }, '⚠ mangler bevis') : status === 'modpart' ? el('span', { class: 'opp-flag' }, '✓ modparten skal bevise dette') : null)),
         el('div', { class: 'el-args' },
           el('div', { class: 'arg-col' }, el('div', { class: 'arg-label' }, '⚔ Modpartens indsigelse'), editable('div', elx.objection, (v) => patch(elx, 'objection', v), 'arg-text')),
           el('div', { class: 'arg-col' }, el('div', { class: 'arg-label' }, '🛡 Dit modsvar'), editable('div', elx.rebuttal, (v) => patch(elx, 'rebuttal', v), 'arg-text')))));

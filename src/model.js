@@ -29,20 +29,45 @@ export function newEvent(p = {}) {
 
 // Argumentkort: påstand → beviskrav (retsfaktum) → bevis. Deterministisk hul-detektion.
 export function newClaim(title = 'Ny påstand', i = 0) { return { id: uid('cl'), title, color: SUMMARY_COLORS[i % SUMMARY_COLORS.length], elements: [] }; }
-export function newElement(text = '') { return { id: uid('el'), text: text || 'Nyt beviskrav', evidence: [], objection: '', rebuttal: '' }; }
-// sagsstyrke pr. påstand: dækning × bevis-styrke (urateret bevis = middel/3). Returnerer score 0–1, antal huller, label.
-export function claimStrength(claim, events) {
+// burden: hvem har bevisbyrden ('mig'|'modpart'); essential: afgørende beviskrav (kumulativt)
+export function newElement(text = '') { return { id: uid('el'), text: text || 'Nyt beviskrav', evidence: [], objection: '', rebuttal: '', burden: 'mig', essential: true }; }
+export function newCitation(p = {}) { return { id: uid('cit'), eventId: p.eventId || null, fileId: p.fileId || null, page: p.page || '', quote: p.quote || '' }; }
+
+// status pr. beviskrav (til UI): 'ok' (bevis) · 'hul' (mangler bevis OG jeg har byrden) · 'modpart' (modpartens byrde)
+export function elementStatus(el) {
+  const hasEv = (el.evidence || []).length > 0;
+  if (hasEv) return 'ok';
+  return (el.burden || 'mig') === 'modpart' ? 'modpart' : 'hul';
+}
+
+// sagsstyrke pr. påstand (GLM-jurist-audit): bevisbyrde + korroboration + kumulativt killswitch.
+// Bevis kan være begivenhed ELLER citat. Ét AFGØRENDE hul (min byrde) ⇒ påstanden er reelt død (kritisk).
+export function claimStrength(claim, events, citations = []) {
   const els = (claim && claim.elements) || [];
-  if (!els.length) return { score: 0, gaps: 0, label: 'tom' };
+  if (!els.length) return { score: 0, gaps: 0, critical: false, label: 'tom' };
   const byId = {}; for (const e of events || []) byId[e.id] = e;
-  let sum = 0, gaps = 0;
+  const citById = {}; for (const ct of citations || []) citById[ct.id] = ct;
+  const strengthOf = (id) => {
+    if (byId[id]) return byId[id].strength || 3;
+    const ct = citById[id]; if (ct) return (byId[ct.eventId] && byId[ct.eventId].strength) || 3;
+    return null;
+  };
+  let sum = 0, gaps = 0, critical = false;
   for (const el of els) {
-    const ev = (el.evidence || []).map((id) => byId[id]).filter(Boolean);
-    if (!ev.length) { gaps++; continue; }
-    sum += Math.max(...ev.map((e) => e.strength || 3)) / 5;
+    const s = (el.evidence || []).map(strengthOf).filter((x) => x != null);
+    if (!s.length) {
+      if ((el.burden || 'mig') === 'modpart') { sum += 0.6; continue; }   // modpartens byrde → ikke mit problem
+      gaps++; if (el.essential !== false) critical = true;                 // mit afgørende hul → kritisk
+      continue;
+    }
+    const base = Math.max(...s) / 5;                                       // stærkeste bevis
+    const bonus = Math.min(0.25, (s.length - 1) * 0.06);                   // korroboration: flere uafhængige beviser løfter
+    sum += Math.min(1, base + bonus);
   }
-  const score = sum / els.length;
-  return { score, gaps, label: score >= 0.7 ? 'stærk' : score >= 0.4 ? 'middel' : 'svag' };
+  let score = sum / els.length;
+  if (critical) score = Math.min(score, 0.2);                             // ét kritisk hul ⇒ påstanden er død
+  const label = critical ? 'kritisk hul' : score >= 0.7 ? 'stærk' : score >= 0.4 ? 'middel' : 'svag';
+  return { score, gaps, critical, label };
 }
 
 export const ROLES = ['Klient', 'Modpart', 'Vidne', 'Advokat', 'Dommer', 'Andet'];
