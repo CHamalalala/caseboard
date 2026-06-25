@@ -7,6 +7,7 @@ import { el, toast, insertModal } from './ui.js';
 import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
 import { buildShareZip, overviewHtml } from './export.js';
 import { drawConnectors, clearConnectors } from './connectors.js';
+import { extractText } from './extract.js';
 
 const root = () => document.getElementById('app');
 const state = {
@@ -85,6 +86,10 @@ async function addEventFromModal() {
     attachments.push({ fileId: id, name: data.file.name, mime: data.file.type });
     if (!data.title) data.title = data.file.name.replace(/\.[^.]+$/, '');   // auto-titel fra filnavn
     if (data.type === 'handling') data.type = 'dokument';
+    // udtræk søgbar tekst i baggrunden (gør dokumentet søgbart inde i)
+    extractText(data.file, data.file.name, data.file.type)
+      .then((text) => db.putFile(id, { name: data.file.name, mime: data.file.type, blob: data.file, text: text || '' }))
+      .catch(() => {});
   }
   const ev = newEvent({ ...data, attachments });
   state.case.events.push(ev);
@@ -95,6 +100,20 @@ async function addEventFromModal() {
 
 function openOriginal(att) { db.getFile(att.fileId).then((rec) => { if (!rec) return toast('Filen mangler', 'warn'); window.open(blobUrl(rec.blob), '_blank'); }).catch(fail); }
 function exportOriginal(att) { db.getFile(att.fileId).then((rec) => { if (!rec) return; const a = el('a', { href: blobUrl(rec.blob), download: att.name || 'bilag' }); a.click(); }).catch(fail); }
+
+// Udtræk tekst af alle bilag der mangler det (gør dem søgbare inde i)
+async function reindexDocs(c, onProgress) {
+  const ids = caseFileIds(c); let done = 0, added = 0;
+  for (const fid of ids) {
+    const rec = await db.getFile(fid); done++;
+    if (!rec || rec.text != null) { onProgress && onProgress(done, ids.length); continue; }
+    const text = await extractText(rec.blob, rec.name, rec.mime);
+    await db.putFile(fid, { name: rec.name, mime: rec.mime, blob: rec.blob, text: text || '' });
+    if (text) added++;
+    onProgress && onProgress(done, ids.length);
+  }
+  return { total: ids.length, added };
+}
 
 function patch(obj, key, val) { obj[key] = val; save(); }
 function addSummary() { const s = newSummary(); state.case.summaries.unshift(s); save(); renderCase(); return s; }
@@ -542,9 +561,16 @@ function renderSoeg(c) {
   }
   const update = () => { if (ready) renderResults(results, runSearch(ms, Object.values(docMap), input.value, kinds), docMap, input.value, jumpInCase); };
   input.addEventListener('input', update);
+  const reindexBtn = el('button', { class: 'btn ghost sm', onclick: async () => {
+    reindexBtn.disabled = true;
+    const { added, total } = await reindexDocs(c, (d, t) => { reindexBtn.textContent = `Indekserer … ${d}/${t}`; });
+    toast(total ? `Indekseret — ${added} dokumenter blev søgbare` : 'Ingen dokumenter at indeksere', added ? 'ok' : 'warn');
+    renderCase();
+  } }, '📄 Gør dokumenter søgbare');
   wrap.append(
     el('div', { class: 'searchbar-row' }, el('span', { class: 'sicon' }, '🔎'), input),
     el('div', { class: 'scoperow' }, el('span', { class: 'muted sm' }, 'Søg kun i (vælg for at filtrere):'), chipsBar),
+    el('div', { class: 'scoperow' }, reindexBtn, el('span', { class: 'muted sm' }, 'Kør én gang for at kunne søge INDE i PDF/Word-filer.')),
     results);
   (async () => {
     const fileTexts = {};
