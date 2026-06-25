@@ -243,3 +243,5 @@ body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}
 /* spring-til-begivenhed highlight (J3) */
 @keyframes cbflash{0%{box-shadow:0 0 0 3px #ffd27a}60%{box-shadow:0 0 0 3px #ffd27a}100%{box-shadow:0 0 0 3px rgba(255,210,122,0)}}
 .card.ev.flash{animation:cbflash 1.6s ease-out}
+.dt-edit{display:flex;align-items:center;gap:8px;margin:6px 0 10px}
+.dt-edit .fdate{font-family:inherit}

@@ -9,6 +9,7 @@ import { buildShareZip, overviewHtml } from './export.js';
 import { drawConnectors, clearConnectors } from './connectors.js';
 import { extractText } from './extract.js';
 import { keyPoints, suggestHeading } from './summarize.js';
+import { parseEml } from './eml.js';
 
 const root = () => document.getElementById('app');
 const state = {
@@ -190,6 +191,12 @@ async function importData(data) {
   await db.saveCaseRec(c); await refreshCases(); openCaseObj(c); toast('Sag importeret: ' + (c.title || ''), 'ok');
 }
 async function importCase(file) { try { await importData(JSON.parse(await file.text())); } catch (e) { fail(e instanceof AppError ? e : Err.import('import fejlede', e)); } }
+// router: en .eml-mail → tilføj til tidslinjen; ellers en sags-fil → importér sag
+async function routeDroppedFile(f) {
+  if (!f) return;
+  if (/\.eml$/i.test(f.name) || f.type === 'message/rfc822') { try { await addMailToCase(parseEml(await f.text())); } catch (e) { fail(e); } }
+  else importCase(f);
+}
 async function loadDemo() {
   try {
     const ev = (date, title, type, body) => ({ id: 'd_' + date + type, date, title, type, parties: '', body, attachments: [] });
@@ -244,7 +251,7 @@ function renderHome() {
         el('button', { class: 'btn primary', onclick: createCase }, '➕ Opret ny sag'),
         openSagBtn('📂 Åbn en sag'),
         el('button', { class: 'btn', onclick: loadDemo }, '✨ Se et eksempel')),
-      el('div', { class: 'dropnote' }, '⤓ … eller træk en sagsfil ind her'),
+      el('div', { class: 'dropnote' }, '⤓ … eller træk en sagsfil — eller en mail (.eml) — ind her'),
       el('p', { class: 'hint muted' }, '“Åbn en sag” henter en sagsfil du har gemt eller fået tilsendt.')));
   } else {
     body.append(globalSearchBar(), el('div', { class: 'casegrid' }, ...state.cases.sort((a, b) => (b.updated || 0) - (a.updated || 0)).map(caseCard),
@@ -253,7 +260,7 @@ function renderHome() {
   // træk-en-sagsfil-ind (forstås nemmere end en fil-dialog)
   body.addEventListener('dragover', (e) => { e.preventDefault(); body.classList.add('drop-active'); });
   body.addEventListener('dragleave', (e) => { if (e.target === body) body.classList.remove('drop-active'); });
-  body.addEventListener('drop', (e) => { e.preventDefault(); body.classList.remove('drop-active'); const f = e.dataTransfer.files[0]; if (f) importCase(f); });
+  body.addEventListener('drop', (e) => { e.preventDefault(); body.classList.remove('drop-active'); const f = e.dataTransfer.files[0]; if (f) routeDroppedFile(f); });
   // permanent fane-strip: åbne sager forsvinder ALDRIG når man går hjem
   root().replaceChildren(...(state.openOrder.length ? [header, casetabsStrip(), body] : [header, body]));
 }
@@ -296,7 +303,7 @@ function eventCard(ev) {
 
   const head = el('div', { class: 'fane-head', onclick: () => selectEvent(ev.id) },
     el('span', { class: 'caret', onclick: (e) => { e.stopPropagation(); open ? state.expanded.delete(ev.id) : state.expanded.add(ev.id); renderCase(); } }, open ? '▾' : '▸'),
-    el('span', { class: 'date' }, daDate(ev.date)),
+    el('span', { class: 'date' }, daDate(ev.date) + (ev.time ? ' ' + ev.time : '')),
     el('span', { class: 'ficon' }, att ? kindIcon(kind) : '•'),
     editable('span', ev.title, (v) => patch(ev, 'title', v), 'title', true),
     el('button', { class: 'plus-btn', title: 'Føj til opsummering', onclick: (e) => { e.stopPropagation(); summaryPopover(e.currentTarget, ev); } }, '＋'),
@@ -309,6 +316,10 @@ function eventCard(ev) {
 
   if (open) {
     const body = el('div', { class: 'fane-body' });
+    if (state.editMode) body.append(el('div', { class: 'dt-edit' },
+      el('span', { class: 'muted sm' }, '📅 Dato / tid:'),
+      el('input', { type: 'date', value: ev.date, class: 'fdate', onchange: (e) => { patch(ev, 'date', e.target.value); renderCase(); } }),
+      el('input', { type: 'time', value: ev.time || '', class: 'fdate', onchange: (e) => patch(ev, 'time', e.target.value) })));
     if (att) {
       const pv = el('div', { class: 'preview' }); previewInto(pv, att); body.append(pv);
       body.append(el('div', { class: 'doc-actions' },
@@ -426,7 +437,11 @@ function renderCase() {
     : state.tab === 'frister' ? renderFrister(c)
     : state.tab === 'tid' ? renderTid(c)
     : state.tab === 'soeg' ? renderSoeg(c) : renderOverblik(c);
-  root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, el('div', { class: 'sectionbody' }, view));
+  const sb = el('div', { class: 'sectionbody' }, view);
+  sb.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); sb.classList.add('drop-active'); } });
+  sb.addEventListener('dragleave', (e) => { if (e.target === sb) sb.classList.remove('drop-active'); });
+  sb.addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f && /\.eml$/i.test(f.name)) { e.preventDefault(); sb.classList.remove('drop-active'); routeDroppedFile(f); } });
+  root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, sb);
   // forbindelses-tråde: ALLE opsummeringer (hver sin farve); valgt fremhæves (kun på tidslinjen).
   // Synkront (getBoundingClientRect tvinger layout) — mere robust end rAF, der throttles i baggrunds-faner.
   if (state.tab === 'tidslinje') {
@@ -721,7 +736,7 @@ async function addMailToCase(mail) {
     const safe = (mail.subject || 'mail').replace(/[\\/:*?"<>|\n\r]+/g, '-').slice(0, 80);
     const fileId = uid('file');
     await db.putFile(fileId, { name: safe + '.html', mime: 'text/html', blob: new Blob([mailHtml(mail)], { type: 'text/html' }), text: (mail.subject || '') + '\n' + (mail.bodyText || '') });
-    const ev = newEvent({ date: mail.date || today(), title: mail.subject || '(mail uden emne)', type: 'mail',
+    const ev = newEvent({ date: mail.date || today(), time: mail.time || '', title: mail.subject || '(mail uden emne)', type: 'mail',
       parties: [mail.from, mail.to].filter(Boolean).join(' → '), body: (mail.bodyText || '').slice(0, 600),
       attachments: [{ fileId, name: safe + '.html', mime: 'text/html' }] });
     state.case.events.push(ev); state.expanded = new Set([ev.id]); state.tab = 'tidslinje';

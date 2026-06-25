@@ -22,6 +22,8 @@ export function newEvent(p = {}) {
     attachments: p.attachments || [],      // [{fileId, name}]
     tags: p.tags || [],                    // etiketter (emne/bevis/...)
     people: p.people || [],                // personId'er knyttet til begivenheden
+    time: p.time || '',                    // HH:MM (fx mailens modtage-tidspunkt)
+    strength: p.strength || 0,             // bevis-styrke 1–5 (0 = ikke sat)
   };
 }
 
