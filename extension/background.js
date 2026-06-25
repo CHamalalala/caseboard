@@ -1,13 +1,12 @@
-// background.js — modtager mail fra mail-knappen, lægger den (m. valgte sager) i kø, og sikrer en CaseBoard-fane.
+// background.js — modtager mail fra mail-knappen, lægger den (m. valgte sager) i en DURABEL kø, og sikrer en CaseBoard-fane.
+// Hver mail får sin EGEN storage-nøgle (q_<id>) → ingen read-modify-write-race på en delt liste (GLM P0).
 const CASEBOARD_URL = 'https://chamalalala.github.io/caseboard/';
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'add-mail') return;
   (async () => {
-    // læg mail + valgte sager i kø (bridge.js tømmer den, når CaseBoard er klar)
-    const { pending = [] } = await chrome.storage.local.get('pending');
-    pending.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), email: msg.email, targets: msg.targets || null });
-    await chrome.storage.local.set({ pending });
+    const id = Date.now() + '-' + Math.random().toString(36).slice(2);
+    await chrome.storage.local.set({ ['q_' + id]: { id, email: msg.email, targets: msg.targets || null, at: Date.now() } });
 
     // sikr en CaseBoard-fane så mailen kan skrives. Med targets (valgt i popup'en) STJÆLER vi IKKE fokus — åbn i baggrunden.
     const tabs = await chrome.tabs.query({ url: 'https://chamalalala.github.io/caseboard/*' });

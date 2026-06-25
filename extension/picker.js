@@ -46,11 +46,14 @@
 
   function open(email) {
     return new Promise(async (resolve) => {
+      if (document.getElementById('cb-picker-host')) { resolve(null); return; }   // guard mod dobbelt-åbning (GLM P1)
       email = email || {};
-      const cases = await getCaseList();
+      const prevFocus = document.activeElement;                                    // gendannes ved luk
       const host = h('div', { id: 'cb-picker-host', style: 'all:initial;position:fixed;inset:0;z-index:2147483647' });
       const root = host.attachShadow({ mode: 'open' });
       root.append(h('style', {}, CSS));
+      document.body.appendChild(host);     // append SYNKRONT (FØR await) → guarden fanger samtidige kald (TOCTOU-fix)
+      const cases = await getCaseList();
 
       const sel = new Set();
       let newCase = false;
@@ -97,8 +100,17 @@
         h('div', {}, h('div', { class: 't' }, '➕ Ny sag fra mailen'), h('div', { class: 's' }, 'opretter en sag på mailens emne')));
       newCb.addEventListener('change', () => { newCase = newCb.checked; newRow.classList.toggle('on', newCb.checked); refreshAdd(); });
 
-      const cleanup = (val) => { document.removeEventListener('keydown', onKey, true); host.remove(); resolve(val); };
-      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); cleanup(null); } };
+      const cleanup = (val) => { document.removeEventListener('keydown', onKey, true); host.remove(); try { prevFocus && prevFocus.focus && prevFocus.focus(); } catch (e) { /* ignore */ } resolve(val); };
+      const focusables = () => [...root.querySelectorAll('input,button,[tabindex]')].filter((x) => !x.disabled && x.offsetParent !== null);
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); cleanup(null); return; }
+        if (e.key === 'Tab') {                                   // focus-trap: hold Tab inde i popup'en (GLM P1, a11y)
+          const f = focusables(); if (!f.length) return;
+          const a = root.activeElement, first = f[0], last = f[f.length - 1];
+          if (e.shiftKey && (a === first || !root.contains(a))) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && (a === last || !root.contains(a))) { e.preventDefault(); first.focus(); }
+        }
+      };
       document.addEventListener('keydown', onKey, true);
 
       addBtn.addEventListener('click', () => {
@@ -121,7 +133,6 @@
             h('button', { class: 'btn ghost', onclick: () => cleanup(null) }, 'Annullér'),
             addBtn)));
       root.append(back);
-      document.body.appendChild(host);
       setTimeout(() => (cases.length ? search : subj).focus(), 30);
     });
   }
