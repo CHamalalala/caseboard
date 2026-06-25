@@ -834,7 +834,9 @@ const MAIL_NONCE = uid('nonce');
 const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function mailHtml(m) {
   const body = m.bodyHtml ? m.bodyHtml : escHtml(m.bodyText || '').replace(/\n/g, '<br>');
-  return `<!DOCTYPE html><html lang="da"><head><meta charset="UTF-8"><title>${escHtml(m.subject || 'Mail')}</title>
+  // CSP: blokér ALLE eksterne hentninger (tracking-pixels via <img src=http>, ekstern CSS/font-exfil, scripts) — kun inline + data:.
+  // GLM-review: sandbox='' alene stopper IKKE tracking-pixels → denne CSP gør, så afsenderen ikke kan se at mailen er åbnet.
+  return `<!DOCTYPE html><html lang="da"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'"><title>${escHtml(m.subject || 'Mail')}</title>
 <style>body{font-family:"Segoe UI",Arial,sans-serif;color:#1a1a1a;max-width:760px;margin:24px auto;padding:0 16px;line-height:1.5}
 .h{background:#f4f6fb;border:1px solid #e2e6ee;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px}
 .h b{color:#14213d}.subj{font-size:20px;color:#14213d;font-weight:800;margin:0 0 12px}</style></head><body>

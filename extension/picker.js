@@ -66,7 +66,6 @@
       const from = h('input', { class: 'in', value: email.from || '', placeholder: 'Afsender' });
       const bodyArea = h('textarea', { class: 'in ta', rows: '4', placeholder: 'Mailens indhold (følger med i sagen)' });
       bodyArea.value = email.bodyText || '';
-      const origBody = email.bodyText || '';
       const search = h('input', { class: 'in search', type: 'search', placeholder: '🔎 Søg i sager…' });
 
       const addBtn = h('button', { class: 'btn add', disabled: 'true' }, 'Tilføj');
@@ -118,11 +117,11 @@
       document.addEventListener('keydown', onKey, true);
 
       addBtn.addEventListener('click', () => {
-        const editedBody = bodyArea.value;
-        const bodyChanged = editedBody !== origBody;   // redigeret tekst → brug den (ryd formateret html så teksten vises)
+        // bevar ALTID den formaterede original (bodyHtml) — GLM: ryd den ikke ved en lille tekst-rettelse.
+        // Kun hvis der slet ingen formateret original var (fx blokeret-indhold-mail), bruges den indtastede tekst som body.
         const edited = Object.assign({}, email, {
           subject: subj.value.trim() || '(uden emne)', date: date.value || email.date, time: time.value || '', from: from.value.trim(),
-          bodyText: editedBody, bodyHtml: bodyChanged ? '' : email.bodyHtml,
+          bodyText: bodyArea.value,
         });
         cleanup({ targets: { caseIds: [...sel], newCase }, email: edited });
       });
