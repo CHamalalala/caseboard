@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "CaseBoard — Tilføj til sag",
+  "version": "1.0.0",
+  "description": "Tilføj en e-mail direkte til en sag i CaseBoard — uden screenshots. Data sendes kun til din lokale CaseBoard.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["https://mail.google.com/*", "https://chamalalala.github.io/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["https://mail.google.com/*"], "js": ["gmail.js"], "run_at": "document_idle" },
+    { "matches": ["https://chamalalala.github.io/caseboard/*"], "js": ["bridge.js"], "run_at": "document_idle" }
+  ],
+  "action": { "default_title": "CaseBoard — Tilføj til sag" }
+}

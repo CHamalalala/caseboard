@@ -12,13 +12,20 @@ const STOP = new Set((
 
 const words = (s) => (s.toLowerCase().match(/[a-zæøåéü0-9]+/gi) || []);
 
-// del tekst i sætninger (robust nok; bevarer original tekst)
+// forkortelser/mønstre hvor et punktum IKKE afslutter en sætning (GLM-review)
+const ABBR = /(\b(bl\.a|f\.eks|m\.fl|jf|pkt|nr|stk|kr|ca|inkl|ekskl|evt|osv|mht|iht|vedr|adv|red|tlf|s|t|fx|dvs|p\.t|d\.d|d\.s\.o)\.?|\b\p{Lu}|\b\d{1,4})\.$/u;
+
+// del tekst i sætninger; flet falske splits (datoer "3.", forkortelser "bl.a.", initialer). Bevarer original tekst.
 export function splitSentences(text) {
-  return (text || '')
-    .replace(/\s+/g, ' ')
-    .split(/(?<=[.!?])\s+(?=[A-ZÆØÅ0-9])/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  const t = (text || '').replace(/\s+/g, ' ').trim();
+  if (!t) return [];
+  const rough = t.split(/(?<=[.!?])\s+(?=[\p{Lu}0-9"«(])/u);
+  const out = [];
+  for (const part of rough) {
+    if (out.length && ABBR.test(out[out.length - 1].trim())) out[out.length - 1] += ' ' + part;  // forrige sluttede på en forkortelse/tal → flet
+    else out.push(part);
+  }
+  return out.map((s) => s.trim()).filter(Boolean);
 }
 
 // returnerer top-N EKSISTERENDE sætninger (i original rækkefølge). Ingen ny tekst.

@@ -684,6 +684,49 @@ function globalSearchBar() {
   return wrap;
 }
 
+// ---------- mail-modtager (fra browser-udvidelsen "Tilføj til sag") ----------
+// Sikkerhed: kun samme-origin postMessage MED korrekt nonce accepteres (afvis spoofing).
+const MAIL_NONCE = uid('nonce');
+const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function mailHtml(m) {
+  const body = m.bodyHtml ? m.bodyHtml : escHtml(m.bodyText || '').replace(/\n/g, '<br>');
+  return `<!DOCTYPE html><html lang="da"><head><meta charset="UTF-8"><title>${escHtml(m.subject || 'Mail')}</title>
+<style>body{font-family:"Segoe UI",Arial,sans-serif;color:#1a1a1a;max-width:760px;margin:24px auto;padding:0 16px;line-height:1.5}
+.h{background:#f4f6fb;border:1px solid #e2e6ee;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px}
+.h b{color:#14213d}.subj{font-size:20px;color:#14213d;font-weight:800;margin:0 0 12px}</style></head><body>
+<div class="subj">${escHtml(m.subject || '(uden emne)')}</div>
+<div class="h"><div><b>Fra:</b> ${escHtml(m.from || '')}</div><div><b>Til:</b> ${escHtml(m.to || '')}</div><div><b>Dato:</b> ${escHtml(m.dateText || m.date || '')}</div></div>
+<div>${body}</div></body></html>`;
+}
+async function addMailToCase(mail) {
+  try {
+    if (!state.case) {
+      await refreshCases();
+      if (state.cases[0]) openCaseObj(await db.getCase(state.cases[0].id));
+      else { const c = newCase('Ny sag'); await db.saveCaseRec(c); await refreshCases(); openCaseObj(c); }
+    }
+    const safe = (mail.subject || 'mail').replace(/[\\/:*?"<>|\n\r]+/g, '-').slice(0, 80);
+    const fileId = uid('file');
+    await db.putFile(fileId, { name: safe + '.html', mime: 'text/html', blob: new Blob([mailHtml(mail)], { type: 'text/html' }), text: (mail.subject || '') + '\n' + (mail.bodyText || '') });
+    const ev = newEvent({ date: mail.date || today(), title: mail.subject || '(mail uden emne)', type: 'mail',
+      parties: [mail.from, mail.to].filter(Boolean).join(' → '), body: (mail.bodyText || '').slice(0, 600),
+      attachments: [{ fileId, name: safe + '.html', mime: 'text/html' }] });
+    state.case.events.push(ev); state.expanded = new Set([ev.id]); state.tab = 'tidslinje';
+    await save(); renderCase();
+    toast('📧 Mail tilføjet: ' + (mail.subject || ''), 'ok');
+  } catch (e) { fail(e); }
+}
+function setupMailReceiver() {
+  document.documentElement.dataset.caseboard = '1';      // udvidelsen kan se at CaseBoard er åben
+  document.documentElement.dataset.cbNonce = MAIL_NONCE;  // delt hemmelighed (kun læsbar samme-origin)
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin) return;
+    const d = e.data;
+    if (!d || d.type !== 'caseboard-mail' || d.nonce !== MAIL_NONCE || !d.email) return;
+    addMailToCase(d.email);
+  });
+}
+
 // ---------- migration (v1 -> cases) + boot ----------
 async function migrateLegacy() {
   if ((await db.listCases()).length) return;
@@ -691,6 +734,6 @@ async function migrateLegacy() {
   if (legacy) { legacy.id = legacy.id || uid('case'); legacy.updated = legacy.updated || Date.now(); await db.saveCaseRec(legacy); await db.clearLegacy(); log.ok('app', 'migrerede gammel enkelt-sag'); }
 }
 (async function boot() {
-  try { await db.openDB(); await migrateLegacy(); await navHome(); log.info('app', 'boot', state.cases.length + ' sager'); }
+  try { await db.openDB(); await migrateLegacy(); await navHome(); setupMailReceiver(); log.info('app', 'boot', state.cases.length + ' sager'); }
   catch (e) { fail(e); }
 })();
