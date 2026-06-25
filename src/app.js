@@ -2,7 +2,7 @@
 import { log } from './log.js';
 import { Err, AppError } from './errors.js';
 import * as db from './db.js';
-import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon, ROLES, newPerson, newDeadline, deadlineStatus } from './model.js';
+import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon, ROLES, newPerson, newDeadline, deadlineStatus, SUMMARY_COLORS } from './model.js';
 import { el, toast, insertModal } from './ui.js';
 import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
 import { buildShareZip, overviewHtml } from './export.js';
@@ -117,7 +117,7 @@ async function reindexDocs(c, onProgress) {
 }
 
 function patch(obj, key, val) { obj[key] = val; save(); }
-function addSummary() { const s = newSummary(); state.case.summaries.unshift(s); save(); renderCase(); return s; }
+function addSummary() { const s = newSummary('Ny opsummering', state.case.summaries.length); state.case.summaries.unshift(s); save(); renderCase(); return s; }
 function linkEventToSummary(summaryId, ev) {
   const s = state.case.summaries.find((x) => x.id === summaryId); if (!s) return;
   if (s.links.some((l) => l.refId === ev.id)) { s.links = s.links.filter((l) => l.refId !== ev.id); }  // toggle
@@ -313,12 +313,23 @@ function eventCard(ev) {
   return card;
 }
 
-function summaryCard(su) {
+function summaryCard(su, i = 0) {
+  // bagudkompatibel: gamle opsummeringer mangler x/y/color
+  if (su.x == null) su.x = 16 + (i % 3) * 24;
+  if (su.y == null) su.y = 16 + i * 150;
+  if (!su.color) su.color = SUMMARY_COLORS[i % SUMMARY_COLORS.length];
   const selected = state.selSummary === su.id;
   const hot = state.selEvent && su.links.some((l) => l.refId === state.selEvent);
-  const card = el('div', { class: `card summary${selected ? ' selected' : ''}${hot ? ' hot' : ''}`, draggable: 'true', dataset: { sid: su.id } },
+  const card = el('div', {
+    class: `card summary${selected ? ' selected' : ''}${hot ? ' hot' : ''}`,
+    dataset: { sid: su.id },
+    style: `position:absolute;left:${su.x}px;top:${su.y}px;border-left-color:${su.color}`,
+  });
+  const grip = el('span', { class: 'grip', title: 'Træk for at flytte' }, '⠿');
+  card.append(
     el('div', { class: 'su-head', onclick: () => selectSummary(su.id) },
-      el('span', { class: 'grip', title: 'Træk for at flytte' }, '⠿'),
+      grip,
+      el('span', { class: 'colorswatch', title: 'Skift farve', style: `background:${su.color}`, onclick: (e) => { e.stopPropagation(); su.color = SUMMARY_COLORS[(SUMMARY_COLORS.indexOf(su.color) + 1) % SUMMARY_COLORS.length]; save(); renderCase(); } }),
       editable('span', su.title, (v) => patch(su, 'title', v), 'title'),
       el('span', { class: 'x del', title: 'Slet', onclick: (e) => { e.stopPropagation(); state.case.summaries = state.case.summaries.filter((x) => x.id !== su.id); save(); renderCase(); } }, '🗑')),
     editable('div', su.body, (v) => patch(su, 'body', v), 'body'));
@@ -327,18 +338,17 @@ function summaryCard(su) {
   if (su.anchorDate) anchorRow.append(el('span', { class: 'anchor' }, '📌 ' + daDate(su.anchorDate), el('b', { class: 'x', onclick: () => { su.anchorDate = null; save(); renderCase(); } }, ' ✕')));
   else if (state.selEvent) { const e = state.case.events.find((x) => x.id === state.selEvent); if (e) anchorRow.append(el('button', { class: 'btn ghost sm', onclick: () => { su.anchorDate = e.date; save(); renderCase(); } }, '📌 Anker til ' + daDate(e.date))); }
   card.append(anchorRow);
-  // linkede begivenheder
   card.append(el('div', { class: 'links' }, ...su.links.map((l) =>
     el('span', { class: 'chip link', onclick: () => selectEvent(l.refId) }, l.label,
       el('b', { class: 'x', onclick: (e) => { e.stopPropagation(); su.links = su.links.filter((y) => y.refId !== l.refId); save(); renderCase(); } }, ' ✕')))));
-  // drag-reorder (træk opsummeringer rundt)
-  card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('sid', su.id); card.classList.add('dragging'); });
-  card.addEventListener('dragend', () => card.classList.remove('dragging'));
-  card.addEventListener('dragover', (e) => e.preventDefault());
-  card.addEventListener('drop', (e) => {
-    e.preventDefault(); const sid = e.dataTransfer.getData('sid'); if (!sid || sid === su.id) return;
-    const arr = state.case.summaries; const from = arr.findIndex((x) => x.id === sid); const to = arr.findIndex((x) => x.id === su.id);
-    if (from < 0 || to < 0) return; arr.splice(to, 0, arr.splice(from, 1)[0]); save(); renderCase();
+  // frit træk på lærredet (via grebet)
+  grip.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); card.setPointerCapture?.(e.pointerId);
+    const sx = e.clientX, sy = e.clientY, ox = su.x, oy = su.y;
+    card.classList.add('dragging');
+    const move = (ev) => { su.x = Math.max(0, ox + ev.clientX - sx); su.y = Math.max(0, oy + ev.clientY - sy); card.style.left = su.x + 'px'; card.style.top = su.y + 'px'; redrawThreads(); };
+    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); card.classList.remove('dragging'); save(); };
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
   });
   return card;
 }
@@ -383,23 +393,19 @@ function renderCase() {
     : state.tab === 'frister' ? renderFrister(c)
     : state.tab === 'soeg' ? renderSoeg(c) : renderOverblik(c);
   root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, el('div', { class: 'sectionbody' }, view));
-  // forbindelses-streger: valgt opsummering → dens begivenheder (kun på tidslinjen)
-  if (state.tab === 'tidslinje' && state.selSummary) {
-    const s = (c.summaries || []).find((x) => x.id === state.selSummary);
-    requestAnimationFrame(() => { const layout = root().querySelector('.layout'); if (layout && s) drawConnectors(layout, s); });
+  // forbindelses-tråde: ALLE opsummeringer (hver sin farve); valgt fremhæves (kun på tidslinjen)
+  if (state.tab === 'tidslinje') {
+    requestAnimationFrame(() => { const layout = root().querySelector('.layout'); if (layout) drawConnectors(layout, c.summaries || [], state.selSummary); });
   } else clearConnectors();
 }
+function redrawThreads() {
+  if (state.view === 'case' && state.tab === 'tidslinje' && state.case) {
+    const layout = root().querySelector('.layout');
+    if (layout) drawConnectors(layout, state.case.summaries || [], state.selSummary);
+  }
+}
 let _redrawTimer;
-window.addEventListener('resize', () => {
-  clearTimeout(_redrawTimer);
-  _redrawTimer = setTimeout(() => {
-    if (state.view === 'case' && state.tab === 'tidslinje' && state.selSummary && state.case) {
-      const layout = root().querySelector('.layout');
-      const s = state.case.summaries.find((x) => x.id === state.selSummary);
-      if (layout && s) drawConnectors(layout, s);
-    }
-  }, 120);
-});
+window.addEventListener('resize', () => { clearTimeout(_redrawTimer); _redrawTimer = setTimeout(redrawThreads, 120); });
 
 // ---- Sektion: Tidslinje (begivenheder + opsummeringer) ----
 function renderTidslinje(c) {
@@ -421,14 +427,12 @@ function renderTidslinje(c) {
         el('button', { class: 'mini-btn', onclick: () => { state.expanded.clear(); renderCase(); } }, 'Fold alle')) : null),
     filterbar,
     ...(evs.length ? evs.map(eventCard) : [el('p', { class: 'muted' }, all.length ? 'Ingen begivenheder matcher filteret.' : 'Ingen bilag endnu. Tryk “➕ Indsæt bilag” og upload et dokument, en PDF eller et billede.')]));
-  const anchored = c.summaries.filter((s) => s.anchorDate).sort((a, b) => a.anchorDate < b.anchorDate ? -1 : 1);
-  const rest = c.summaries.filter((s) => !s.anchorDate);
-  const side = el('aside', { class: 'summaries' },
-    el('h2', {}, 'Mine opsummeringer'),
-    el('p', { class: 'muted' }, 'Markér en begivenhed → “+” for at føje den til en opsummering. Træk kort for at flytte; ankr til en dato.'),
-    ...[...anchored, ...rest].map(summaryCard),
-    c.summaries.length ? null : el('p', { class: 'muted' }, 'Ingen endnu — tryk “＋ Opsummering”.'));
-  return el('div', { class: 'layout' }, timeline, side);
+  const sums = c.summaries || [];
+  const maxY = sums.reduce((m, s) => Math.max(m, s.y || 0), 0);
+  const canvas = el('div', { class: 'canvas', style: `min-height:${Math.max(440, maxY + 260)}px` },
+    el('div', { class: 'canvas-hint' }, '🎨 Frit lærred — træk opsummeringerne rundt; hver har sin egen farve på trådene til begivenhederne.'),
+    ...(sums.length ? sums.map((s, i) => summaryCard(s, i)) : [el('p', { class: 'muted canvas-empty' }, 'Ingen opsummeringer endnu — tryk “＋ Opsummering” i toppen.')]));
+  return el('div', { class: 'layout' }, timeline, canvas);
 }
 
 // ---- Sektion: Overblik ----

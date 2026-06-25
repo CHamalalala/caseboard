@@ -1,43 +1,56 @@
-// connectors.js — tegner forbindelses-streger fra den valgte opsummering til dens begivenheder.
-// Et SVG-lag lægges oven på .layout (position:relative). Koordinater er layout-relative,
-// så de holder ved scroll; gen-tegnes ved resize/render.
+// connectors.js — tegner forbindelses-tråde fra opsummeringer (frit placeret) til deres begivenheder.
+// Hver opsummering har SIN farve. Den valgte fremhæves. Lægges oven på .layout (position:relative).
 let svg = null;
 const NS = 'http://www.w3.org/2000/svg';
 
 export function clearConnectors() { if (svg) { svg.remove(); svg = null; } }
 
-export function drawConnectors(layoutEl, summary) {
-  clearConnectors();
-  if (!layoutEl || !summary) return;
-  const sumCard = layoutEl.querySelector('.card.summary.selected');
-  if (!sumCard) return;
-  const evCards = (summary.links || [])
-    .map((l) => layoutEl.querySelector('.card.ev[data-id="' + CSS.escape(l.refId) + '"]')).filter(Boolean);
-  if (!evCards.length) return;
-
-  const lr = layoutEl.getBoundingClientRect();
+function ensureSvg(layoutEl) {
   svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'connectors');
   svg.style.cssText = `position:absolute;left:0;top:0;width:${layoutEl.scrollWidth}px;height:${layoutEl.scrollHeight}px;pointer-events:none;overflow:visible;z-index:4`;
+  layoutEl.appendChild(svg);
+}
 
-  const sr = sumCard.getBoundingClientRect();
-  const sx = sr.left - lr.left;                 // venstre kant af opsummeringen (sidder til højre)
-  const sy = sr.top - lr.top + Math.min(sr.height, 60) / 2;
-
-  for (const ec of evCards) {
-    const er = ec.getBoundingClientRect();
-    const ex = er.right - lr.left;              // højre kant af begivenheden (sidder til venstre)
-    const ey = er.top - lr.top + Math.min(er.height, 42) / 2;
-    const mx = (ex + sx) / 2;
-    const path = document.createElementNS(NS, 'path');
-    path.setAttribute('d', `M ${ex} ${ey} C ${mx} ${ey}, ${mx} ${sy}, ${sx} ${sy}`);
-    path.setAttribute('class', 'conn');
-    svg.appendChild(path);
-    for (const [x, y] of [[ex, ey], [sx, sy]]) {
-      const dot = document.createElementNS(NS, 'circle');
-      dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('r', 4); dot.setAttribute('class', 'conndot');
-      svg.appendChild(dot);
+// summaries: alle opsummeringer · selectedId: fremhæv denne (eller null = alle ens)
+export function drawConnectors(layoutEl, summaries, selectedId) {
+  clearConnectors();
+  if (!layoutEl || !summaries || !summaries.length) return;
+  const lr = layoutEl.getBoundingClientRect();
+  ensureSvg(layoutEl);
+  // tegn ikke-valgte først (svagere), så den valgte ligger øverst
+  const order = [...summaries].sort((a, b) => (a.id === selectedId ? 1 : 0) - (b.id === selectedId ? 1 : 0));
+  for (const s of order) {
+    if (!s.links || !s.links.length) continue;
+    const card = layoutEl.querySelector('.card.summary[data-sid="' + CSS.escape(s.id) + '"]');
+    if (!card) continue;
+    const sel = selectedId && s.id === selectedId;
+    const dim = selectedId && !sel;                 // andre dæmpes når én er valgt
+    const color = s.color || '#e08a00';
+    const sr = card.getBoundingClientRect();
+    const sx = sr.left - lr.left;                    // venstre kant af opsummeringen
+    const sy = sr.top - lr.top + Math.min(sr.height, 64) / 2;
+    for (const l of s.links) {
+      const ec = layoutEl.querySelector('.card.ev[data-id="' + CSS.escape(l.refId) + '"]');
+      if (!ec) continue;
+      const er = ec.getBoundingClientRect();
+      const ex = er.right - lr.left, ey = er.top - lr.top + Math.min(er.height, 42) / 2;
+      const mx = (ex + sx) / 2;
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', `M ${ex} ${ey} C ${mx} ${ey}, ${mx} ${sy}, ${sx} ${sy}`);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', color);
+      path.setAttribute('stroke-width', sel ? 3 : 2);
+      path.setAttribute('stroke-dasharray', '5 4');
+      path.setAttribute('opacity', dim ? 0.25 : 0.9);
+      svg.appendChild(path);
+      for (const [x, y] of [[ex, ey], [sx, sy]]) {
+        const dot = document.createElementNS(NS, 'circle');
+        dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('r', sel ? 4.5 : 3.5);
+        dot.setAttribute('fill', color); dot.setAttribute('opacity', dim ? 0.3 : 1);
+        dot.setAttribute('stroke', '#fff'); dot.setAttribute('stroke-width', 1.5);
+        svg.appendChild(dot);
+      }
     }
   }
-  layoutEl.appendChild(svg);
 }

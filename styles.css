@@ -208,3 +208,15 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .btn.editon:hover{filter:brightness(1.08)}
 .ro{cursor:default}
 body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}
+/* ===== v4 Fase F: frit lærred + farvede tråde ===== */
+.sectionbody .layout{grid-template-columns:1fr 460px}
+@media(max-width:900px){.sectionbody .layout{grid-template-columns:1fr}}
+.canvas{position:relative;background:#fbfcff;border:1px dashed #d3dcec;border-radius:10px;overflow:visible;min-width:300px}
+.canvas-hint{font-size:12px;color:#5b6678;padding:8px 12px;position:sticky;top:0}
+.canvas-empty{padding:16px}
+.canvas .card.summary{position:absolute;width:300px;margin:0;cursor:default;box-shadow:0 2px 10px rgba(20,33,61,.10);background:#fff;border-left-width:5px}
+.canvas .card.summary.dragging{opacity:.9;box-shadow:0 12px 30px rgba(20,33,61,.28);z-index:6}
+.canvas .card.summary.selected{box-shadow:0 0 0 2px #ffd27a,0 8px 24px rgba(20,33,61,.18)}
+.grip{cursor:grab;color:#aab4c8;flex:0 0 auto;font-size:16px;padding:0 2px;touch-action:none}
+.grip:active{cursor:grabbing}
+.colorswatch{width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.25);cursor:pointer;flex:0 0 auto}
