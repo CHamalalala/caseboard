@@ -220,3 +220,14 @@ body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}
 .grip{cursor:grab;color:#aab4c8;flex:0 0 auto;font-size:16px;padding:0 2px;touch-action:none}
 .grip:active{cursor:grabbing}
 .colorswatch{width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.25);cursor:pointer;flex:0 0 auto}
+/* ===== v4 Fase G: timeregnskab ===== */
+.tidtotal{background:var(--navy);color:#fff;border-radius:10px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:baseline;gap:12px}
+.tidtotal .tt-h{font-size:30px;font-weight:800}
+.tidtotal .tt-l{color:#cdd8ef}
+.tidform{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px}
+.tnum{width:60px;border:1px solid #ccd4e2;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit}
+.tnote{flex:1;min-width:160px;border:1px solid #ccd4e2;border-radius:6px;padding:6px 9px;font-size:13px;font-family:inherit}
+.tidrow{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0 0 7px}
+.tidrow .d{color:var(--blue);font-weight:700;white-space:nowrap}
+.tidrow .tmin{font-weight:700;color:var(--navy);min-width:72px}
+.tidrow .tnt{flex:1;color:#4a5568;font-size:13px}

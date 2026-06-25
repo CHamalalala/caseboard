@@ -2,7 +2,7 @@
 import { log } from './log.js';
 import { Err, AppError } from './errors.js';
 import * as db from './db.js';
-import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon, ROLES, newPerson, newDeadline, deadlineStatus, SUMMARY_COLORS } from './model.js';
+import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon, ROLES, newPerson, newDeadline, deadlineStatus, SUMMARY_COLORS, newTimeEntry, sumMinutes, fmtMinutes, toHours } from './model.js';
 import { el, toast, insertModal } from './ui.js';
 import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
 import { buildShareZip, overviewHtml } from './export.js';
@@ -16,6 +16,7 @@ const state = {
   expanded: new Set(), selEvent: null, selSummary: null,
   tlFilter: { types: new Set(), tags: new Set() },   // filtre på tidslinjen
   editMode: false,                                    // tidslinje-tekst er read-only indtil dette slås til
+  timer: null,                                        // {caseId, start} når en tids-timer kører
 };
 const resetView = () => { state.expanded = new Set(); state.selEvent = state.selSummary = null; state.tlFilter = { types: new Set(), tags: new Set() }; };
 const SECTIONS = [
@@ -24,6 +25,7 @@ const SECTIONS = [
   { id: 'dokumenter', label: 'Dokumenter', icon: '📎' },
   { id: 'personer', label: 'Personer', icon: '👤' },
   { id: 'frister', label: 'Frister', icon: '⏰' },
+  { id: 'tid', label: 'Tid', icon: '⏱' },
   { id: 'soeg', label: 'Søg', icon: '🔎' },
 ];
 let _urls = [];                              // aktive blob-URL'er (ryddes ved hver re-render)
@@ -196,7 +198,7 @@ const openSagBtn = (label) => el('label', { class: 'btn ghost file' }, label,
 function caseCard(c) {
   return el('div', { class: 'casecard', onclick: () => openCaseById(c.id) },
     el('div', { class: 'cc-title' }, c.title || '(uden titel)'),
-    el('div', { class: 'cc-meta' }, `${(c.events || []).length} begivenheder · ${(c.summaries || []).length} opsummeringer`),
+    el('div', { class: 'cc-meta' }, `${(c.events || []).length} begivenheder · ${(c.summaries || []).length} opsummeringer` + (sumMinutes(c.timeEntries) ? ` · ${toHours(sumMinutes(c.timeEntries))} t` : '')),
     c.updated ? el('div', { class: 'cc-meta sub' }, 'Senest ændret ' + new Date(c.updated).toLocaleDateString('da-DK')) : null,
     el('div', { class: 'cc-actions' },
       el('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); openCaseById(c.id); } }, 'Åbn'),
@@ -385,7 +387,7 @@ function renderCase() {
       el('button', { class: 'btn ghost', onclick: () => exportShare(c), title: 'Pak sagen som en mappe (Bilag + læsbar oversigt) — nem at dele med en kollega' }, '📦 Del'),
       el('button', { class: 'btn ghost', onclick: () => printChronology(c), title: 'Print en ren kronologi (til retten/møder) — vælg "Gem som PDF"' }, '🖨 Print')));
 
-  const counts = { tidslinje: c.events.length, dokumenter: caseFileIds(c).length, personer: (c.people || []).length, frister: (c.deadlines || []).length };
+  const counts = { tidslinje: c.events.length, dokumenter: caseFileIds(c).length, personer: (c.people || []).length, frister: (c.deadlines || []).length, tid: (c.timeEntries || []).length };
   const sectiontabs = el('div', { class: 'sectiontabs' }, ...SECTIONS.map((s) =>
     el('div', { class: 'sectiontab' + (state.tab === s.id ? ' active' : ''), onclick: () => setTab(s.id) },
       s.icon + ' ' + s.label, counts[s.id] ? el('span', { class: 'badge' }, String(counts[s.id])) : null)));
@@ -394,6 +396,7 @@ function renderCase() {
     : state.tab === 'dokumenter' ? renderDokumenter(c)
     : state.tab === 'personer' ? renderPersoner(c)
     : state.tab === 'frister' ? renderFrister(c)
+    : state.tab === 'tid' ? renderTid(c)
     : state.tab === 'soeg' ? renderSoeg(c) : renderOverblik(c);
   root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, el('div', { class: 'sectionbody' }, view));
   // forbindelses-tråde: ALLE opsummeringer (hver sin farve); valgt fremhæves (kun på tidslinjen).
@@ -451,7 +454,8 @@ function renderOverblik(c) {
     el('div', { class: 'ovcard' }, el('h3', {}, 'Nøgletal'),
       el('div', { class: 'ovstat' }, String(c.events.length)), el('div', { class: 'muted' }, 'begivenheder i sagen'),
       el('div', { class: 'ovrow' }, el('span', {}, 'Dokumenter/bilag'), el('span', { class: 'd' }, String(caseFileIds(c).length))),
-      el('div', { class: 'ovrow' }, el('span', {}, 'Opsummeringer'), el('span', { class: 'd' }, String(c.summaries.length)))),
+      el('div', { class: 'ovrow' }, el('span', {}, 'Opsummeringer'), el('span', { class: 'd' }, String(c.summaries.length))),
+      el('div', { class: 'ovrow' }, el('span', {}, 'Tid brugt'), el('span', { class: 'd ovlink', onclick: () => { state.tab = 'tid'; renderCase(); } }, toHours(sumMinutes(c.timeEntries)) + ' t'))),
     el('div', { class: 'ovcard' }, el('h3', {}, 'Sagsdata'),
       ...Object.entries(c.meta || {}).map(([k, v]) => el('div', { class: 'ovrow' }, el('span', {}, k), el('span', { class: 'd' }, String(v)))),
       Object.keys(c.meta || {}).length ? null : el('div', { class: 'muted' }, 'Ingen sagsdata endnu')),
@@ -483,6 +487,45 @@ function renderDokumenter(c) {
       el('span', { class: 'docrow-date muted' }, daDate(ev.date)),
       el('button', { class: 'btn sm', onclick: () => openOriginal(a) }, '🔍 Åbn'),
       el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(a) }, '⤓ Eksportér'))));
+}
+
+// ---- Sektion: Tid (timeregnskab) ----
+function startTimer(c) { state.timer = { caseId: c.id, start: Date.now() }; renderCase(); }
+function stopTimer(c) {
+  if (!state.timer || state.timer.caseId !== c.id) return;
+  const mins = Math.max(1, Math.round((Date.now() - state.timer.start) / 60000));
+  c.timeEntries = c.timeEntries || []; c.timeEntries.unshift(newTimeEntry({ minutes: mins, note: 'Timer' }));
+  state.timer = null; save(); renderCase(); toast('Tilføjet: ' + fmtMinutes(mins), 'ok');
+}
+function renderTid(c) {
+  c.timeEntries = c.timeEntries || [];
+  const total = sumMinutes(c.timeEntries);
+  const wrap = el('div', { class: 'tidview' },
+    el('div', { class: 'tidtotal' }, el('div', { class: 'tt-h' }, toHours(total) + ' t'), el('div', { class: 'tt-l' }, 'i alt på sagen (' + fmtMinutes(total) + ')')));
+  const running = state.timer && state.timer.caseId === c.id;
+  wrap.append(el('div', { class: 'pv-bar' },
+    running ? el('button', { class: 'btn editon', onclick: () => stopTimer(c) }, '⏹ Stop timer (+ tilføj)')
+            : el('button', { class: 'btn', onclick: () => startTimer(c) }, '▶ Start timer'),
+    running ? el('span', { class: 'muted sm' }, 'Timer kører — startet ' + new Date(state.timer.start).toLocaleTimeString('da-DK')) : null));
+  const dIn = el('input', { type: 'date', value: today(), class: 'fdate' });
+  const hIn = el('input', { type: 'number', min: '0', placeholder: 't', class: 'tnum' });
+  const mIn = el('input', { type: 'number', min: '0', max: '59', placeholder: 'min', class: 'tnum' });
+  const nIn = el('input', { type: 'text', placeholder: 'Hvad lavede du? (valgfrit)', class: 'tnote' });
+  wrap.append(el('div', { class: 'tidform' }, dIn, hIn, el('span', { class: 'muted sm' }, 't'), mIn, el('span', { class: 'muted sm' }, 'min'), nIn,
+    el('button', { class: 'btn primary', onclick: () => {
+      const mins = (Number(hIn.value) || 0) * 60 + (Number(mIn.value) || 0);
+      if (mins <= 0) return toast('Angiv en varighed', 'warn');
+      c.timeEntries.unshift(newTimeEntry({ date: dIn.value, minutes: mins, note: nIn.value })); save(); renderCase();
+    } }, '➕ Tilføj')));
+  if (!c.timeEntries.length) { wrap.append(el('p', { class: 'muted' }, 'Ingen tidsregistreringer endnu. Brug timeren eller tilføj manuelt.')); return wrap; }
+  for (const t of [...c.timeEntries].sort((a, b) => a.date < b.date ? 1 : -1)) {
+    wrap.append(el('div', { class: 'tidrow' },
+      el('span', { class: 'd' }, daDate(t.date)),
+      el('span', { class: 'tmin' }, fmtMinutes(t.minutes)),
+      el('span', { class: 'tnt' }, t.note || ''),
+      el('span', { class: 'x del', title: 'Slet', onclick: () => { c.timeEntries = c.timeEntries.filter((x) => x.id !== t.id); save(); renderCase(); } }, '🗑')));
+  }
+  return wrap;
 }
 
 // ---- Print: ren kronologi (genbruger den læsbare oversigt) → native PDF ----

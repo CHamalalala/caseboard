@@ -26,6 +26,10 @@ export function newEvent(p = {}) {
 }
 
 export const ROLES = ['Klient', 'Modpart', 'Vidne', 'Advokat', 'Dommer', 'Andet'];
+export function newTimeEntry(p = {}) { return { id: uid('t'), date: p.date || today(), minutes: p.minutes || 0, note: p.note || '' }; }
+export const sumMinutes = (entries) => (entries || []).reduce((s, e) => s + (Number(e.minutes) || 0), 0);
+export function fmtMinutes(m) { m = Math.round(m || 0); const h = Math.floor(m / 60); return h ? `${h} t ${m % 60} min` : `${m} min`; }
+export const toHours = (m) => (Math.round((m || 0) / 6) / 10).toFixed(1);   // decimal-timer, 1 decimal
 export function newPerson(name = '') { return { id: uid('pe'), name: name || 'Ny person', role: 'Andet', note: '' }; }
 export function newDeadline(p = {}) { return { id: uid('dl'), date: p.date || today(), title: p.title || 'Ny frist', done: false }; }
 
