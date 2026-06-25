@@ -30,7 +30,8 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .cc-title{font-weight:700;font-size:15px;color:var(--navy);margin-bottom:6px}
 .cc-meta{font-size:12px;color:#6b7280}.cc-meta.sub{margin-top:2px;color:#9aa3b2}
 .cc-actions{margin-top:12px;display:flex;gap:6px}
-.btn.sm{padding:4px 9px;font-size:12px;color:#33508a;border-color:#cdd8ef}
+.btn.sm{padding:4px 9px;font-size:12px;background:#eef2fa;color:#2b4a82;border:1px solid #cdd8ef}
+.btn.sm:hover{background:#e0e8f6}
 .casecard.add{display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed #c3cee2;color:#7d8aa3;border-left-width:2px;min-height:108px}
 .casecard.add .plus{font-size:30px;line-height:1}
 .card{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:8px;padding:10px 12px;margin:0 0 10px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
@@ -237,3 +238,8 @@ body.editing .edit{box-shadow:inset 0 0 0 1px #ffd27a;border-radius:4px}
 .ai-label{font-size:11px;color:#7a4ec0;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
 .ai-text{font-size:13px;color:#2a2342;white-space:pre-wrap;line-height:1.45}
 .ai-apply{margin-top:8px}
+.ai-points{margin:6px 0 0;padding-left:20px}
+.ai-points li{font-size:13px;color:#2a2342;line-height:1.5;margin-bottom:4px}
+/* spring-til-begivenhed highlight (J3) */
+@keyframes cbflash{0%{box-shadow:0 0 0 3px #ffd27a}60%{box-shadow:0 0 0 3px #ffd27a}100%{box-shadow:0 0 0 3px rgba(255,210,122,0)}}
+.card.ev.flash{animation:cbflash 1.6s ease-out}

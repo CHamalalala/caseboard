@@ -8,7 +8,7 @@ import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './
 import { buildShareZip, overviewHtml } from './export.js';
 import { drawConnectors, clearConnectors } from './connectors.js';
 import { extractText } from './extract.js';
-import { extractiveSummary, suggestHeading } from './summarize.js';
+import { keyPoints, suggestHeading } from './summarize.js';
 
 const root = () => document.getElementById('app');
 const state = {
@@ -18,6 +18,7 @@ const state = {
   tlFilter: { types: new Set(), tags: new Set() },   // filtre på tidslinjen
   editMode: false,                                    // tidslinje-tekst er read-only indtil dette slås til
   timer: null,                                        // {caseId, start} når en tids-timer kører
+  scrollTo: null,                                     // begivenheds-id der skal scrolles ind i syne efter render
 };
 const resetView = () => { state.expanded = new Set(); state.selEvent = state.selSummary = null; state.tlFilter = { types: new Set(), tags: new Set() }; };
 const SECTIONS = [
@@ -125,13 +126,18 @@ async function eventText(ev) {
   for (const a of ev.attachments || []) { const rec = await db.getFile(a.fileId); if (rec && rec.text) parts.push(rec.text); }
   return parts.join('\n');
 }
-function renderAi(box, ev, label, text, isHeading) {
+function renderAi(box, ev, label, content, isHeading) {
+  const isPoints = Array.isArray(content);
+  const has = isPoints ? content.length : !!content;
+  const body = isPoints
+    ? (content.length ? el('ul', { class: 'ai-points' }, ...content.map((p) => el('li', {}, p))) : el('div', { class: 'ai-text muted' }, '(ingen tekst at opsummere — tilføj en note eller indeksér dokumentet)'))
+    : el('div', { class: 'ai-text' }, content || '(ingen tekst endnu)');
   box.replaceChildren(
     el('div', { class: 'ai-label' }, '✨ ' + label + ' — uddrag, ingen ny tekst'),
-    el('div', { class: 'ai-text' }, text || '(ingen tekst at opsummere endnu — tilføj en note eller indeksér dokumentet)'),
-    text ? el('div', { class: 'ai-apply' }, isHeading
-      ? el('button', { class: 'btn sm', onclick: () => { patch(ev, 'title', text); renderCase(); } }, '🏷 Brug som overskrift')
-      : el('button', { class: 'btn sm', onclick: () => { ev.body = (ev.body ? ev.body + '\n\n' : '') + text; save(); renderCase(); } }, '📋 Indsæt i note')) : null);
+    body,
+    has ? el('div', { class: 'ai-apply' }, isHeading
+      ? el('button', { class: 'btn sm', onclick: () => { patch(ev, 'title', content); renderCase(); } }, '🏷 Brug som overskrift')
+      : el('button', { class: 'btn sm', onclick: () => { ev.body = (ev.body ? ev.body + '\n\n' : '') + content.map((p) => '• ' + p).join('\n'); save(); renderCase(); } }, '📋 Indsæt i note')) : null);
 }
 
 function patch(obj, key, val) { obj[key] = val; save(); }
@@ -329,7 +335,7 @@ function eventCard(ev) {
     // ✨ ekstraktiv AI (offline, deterministisk, ingen hallucination)
     const aiBox = el('div', { class: 'aibox' });
     body.append(el('div', { class: 'ai-actions' },
-      el('button', { class: 'btn ghost sm', onclick: async () => { aiBox.replaceChildren(el('span', { class: 'muted sm' }, 'Læser tekst …')); renderAi(aiBox, ev, 'Opsummering', extractiveSummary(await eventText(ev), 3)); } }, '✨ Opsummér (uddrag)'),
+      el('button', { class: 'btn ghost sm', onclick: async () => { aiBox.replaceChildren(el('span', { class: 'muted sm' }, 'Læser tekst …')); renderAi(aiBox, ev, 'Nøglepunkter', keyPoints(await eventText(ev), 4)); } }, '✨ Opsummér (nøglepunkter)'),
       el('button', { class: 'btn ghost sm', onclick: async () => { renderAi(aiBox, ev, 'Foreslået overskrift', suggestHeading(await eventText(ev)), true); } }, '✨ Foreslå overskrift')),
       aiBox);
     card.append(body);
@@ -425,6 +431,13 @@ function renderCase() {
   // Synkront (getBoundingClientRect tvinger layout) — mere robust end rAF, der throttles i baggrunds-faner.
   if (state.tab === 'tidslinje') {
     const layout = root().querySelector('.layout'); if (layout) drawConnectors(layout, c.summaries || [], state.selSummary);
+    if (state.scrollTo) {
+      const id = state.scrollTo; state.scrollTo = null;
+      setTimeout(() => {
+        const card = root().querySelector('.card.ev[data-id="' + CSS.escape(id) + '"]');
+        if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 1700); }
+      }, 60);
+    }
   } else clearConnectors();
 }
 function redrawThreads() {
@@ -494,7 +507,7 @@ function renderOverblik(c) {
     el('div', { class: 'ovcard' }, el('h3', {}, 'Seneste'),
       ...(recent.length ? recent.map((e) => el('div', { class: 'ovrow' },
         el('span', { class: 'd' }, daDate(e.date)),
-        el('span', { class: 'ovlink', onclick: () => jump('tidslinje', () => { state.expanded.add(e.id); state.selEvent = e.id; state.selSummary = null; }) }, e.title))) : [el('div', { class: 'muted' }, 'Ingen endnu')])));
+        el('span', { class: 'ovlink', onclick: () => jump('tidslinje', () => { state.expanded.add(e.id); state.selEvent = e.id; state.selSummary = null; state.scrollTo = e.id; }) }, e.title))) : [el('div', { class: 'muted' }, 'Ingen endnu')])));
 }
 
 // ---- Sektion: Dokumenter ----
@@ -505,7 +518,7 @@ function renderDokumenter(c) {
   return el('div', { class: 'doclist' }, ...rows.map(({ a, ev }) =>
     el('div', { class: 'docrow' },
       el('span', { class: 'ficon' }, kindIcon(fileKind(a.mime, a.name))),
-      el('span', { class: 'docrow-name' }, a.name),
+      el('span', { class: 'docrow-name ovlink', title: 'Gå til på tidslinjen', onclick: () => { state.tab = 'tidslinje'; state.expanded.add(ev.id); state.selEvent = ev.id; state.selSummary = null; state.scrollTo = ev.id; renderCase(); } }, a.name),
       el('span', { class: 'docrow-date muted' }, daDate(ev.date)),
       el('button', { class: 'btn sm', onclick: () => openOriginal(a) }, '🔍 Åbn'),
       el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(a) }, '⤓ Eksportér'))));
@@ -610,7 +623,7 @@ const kindMeta = (k) => KINDS.find((x) => x.id === k) || { icon: '•', label: k
 function jumpInCase(h) {
   if (h.kind === 'opsummering') { state.tab = 'tidslinje'; state.selSummary = h.refId; state.selEvent = null; renderCase(); return; }
   if (h.kind === 'person') { state.tab = 'personer'; renderCase(); return; }
-  state.tab = 'tidslinje'; state.expanded.add(h.refId); state.selEvent = h.refId; state.selSummary = null; renderCase();
+  state.tab = 'tidslinje'; state.expanded.add(h.refId); state.selEvent = h.refId; state.selSummary = null; state.scrollTo = h.refId; renderCase();
 }
 function resultRow(h, docMap, terms, onJump) {
   const d = docMap[h.id] || {};
@@ -675,7 +688,7 @@ function globalSearchBar() {
   const jumpGlobal = async (h) => {
     await openCaseById(h.caseId);
     state.tab = 'tidslinje';
-    if (h.kind === 'opsummering') { state.selSummary = h.refId; } else { state.expanded.add(h.refId); state.selEvent = h.refId; }
+    if (h.kind === 'opsummering') { state.selSummary = h.refId; } else { state.expanded.add(h.refId); state.selEvent = h.refId; state.scrollTo = h.refId; }
     renderCase();
   };
   const update = () => renderResults(results, runSearch(ms, Object.values(docMap), input.value, new Set()), docMap, input.value, jumpGlobal);
