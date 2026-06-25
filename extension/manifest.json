@@ -7,8 +7,8 @@
   "host_permissions": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*", "https://chamalalala.github.io/*"],
   "background": { "service_worker": "background.js" },
   "content_scripts": [
-    { "matches": ["https://mail.google.com/*"], "js": ["gmail.js"], "run_at": "document_idle" },
-    { "matches": ["https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*"], "js": ["outlook.js"], "run_at": "document_idle" },
+    { "matches": ["https://mail.google.com/*"], "js": ["datefmt.js", "gmail.js"], "run_at": "document_idle" },
+    { "matches": ["https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*"], "js": ["datefmt.js", "outlook.js"], "run_at": "document_idle" },
     { "matches": ["https://chamalalala.github.io/caseboard/*"], "js": ["bridge.js"], "run_at": "document_idle" }
   ],
   "action": { "default_title": "CaseBoard — Tilføj til sag" }

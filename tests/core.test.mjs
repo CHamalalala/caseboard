@@ -1,6 +1,7 @@
 // Tests på "hjernen" (ren logik i model.js). Kør: node tests/core.test.mjs
 import { sortEvents, insertIndex, newEvent, daDate, deadlineStatus, sumMinutes, fmtMinutes, toHours, computeDeadline, claimStrength } from '../src/model.js';
 import { extractiveSummary, suggestHeading } from '../src/summarize.js';
+import { parseSmartDate } from '../src/datefmt.js';
 import assert from 'node:assert/strict';
 
 let n = 0;
@@ -71,6 +72,20 @@ test('claimStrength: bevisbyrde + kritisk hul + korroboration (GLM-jurist)', () 
   const a = claimStrength({ elements: [{ evidence: ['e1'], burden: 'mig' }] }, events).score;
   const b = claimStrength({ elements: [{ evidence: ['e1', 'e2'], burden: 'mig' }] }, events).score;
   assert.ok(b > a, 'korroboration skal løfte scoren');
+});
+
+test('parseSmartDate: danske + relative + ISO formater (auto-dato)', () => {
+  const now = new Date(2026, 5, 25, 14, 0, 0);          // 25. juni 2026, lokal
+  assert.deepEqual(parseSmartDate('Ons 24-06-2026 11:08', now), { date: '2026-06-24', time: '11:08' });
+  assert.deepEqual(parseSmartDate('24.06.2026', now), { date: '2026-06-24', time: '' });
+  assert.deepEqual(parseSmartDate('16. juni 2026', now), { date: '2026-06-16', time: '' });
+  assert.deepEqual(parseSmartDate('16. jun. 2026 kl. 09.14', now), { date: '2026-06-16', time: '09:14' });
+  assert.deepEqual(parseSmartDate('i går 09:14', now), { date: '2026-06-24', time: '09:14' });
+  assert.equal(parseSmartDate('9 dage siden', now).date, '2026-06-16');
+  assert.deepEqual(parseSmartDate('kl. 11:08', now), { date: '2026-06-25', time: '11:08' });   // i dag
+  assert.deepEqual(parseSmartDate('2026-06-24', now), { date: '2026-06-24', time: '' });        // ISO
+  assert.equal(parseSmartDate('Tue, 16 Jun 2026 14:53:05 +0200', now).date, '2026-06-16');       // RFC822
+  assert.equal(parseSmartDate('hejsa', now), null);
 });
 
 console.log(`\nAlle ${n} tests grønne ✓`);

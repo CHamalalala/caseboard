@@ -12,15 +12,16 @@
     const dateEl = msg.querySelector('.g3, span.gH .g3, .gK span[title]');
     const bodyEl = msg.querySelector('.a3s, .ii.gt div, .ii.gt');
     const dateRaw = dateEl?.getAttribute('title') || dateEl?.textContent || '';
-    const d = new Date(dateRaw);
-    const ok = !isNaN(d);
+    const dt = (window.__cbDate || {}).pickDate
+      ? window.__cbDate.pickDate([dateEl?.getAttribute('datetime'), dateEl?.getAttribute('title'), dateEl?.textContent])
+      : { date: new Date().toISOString().slice(0, 10), time: '' };
     return {
       subject: (subjectEl?.childNodes[0]?.textContent || subjectEl?.textContent || '').trim() || '(uden emne)',
       from: (fromEl?.getAttribute('email') || fromEl?.textContent || '').trim(),
       to: (toEl?.getAttribute('email') || toEl?.textContent || '').trim(),
       dateText: dateRaw.trim(),
-      date: ok ? d.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-      time: ok ? d.toTimeString().slice(0, 5) : '',
+      date: dt.date,
+      time: dt.time,
       bodyText: (bodyEl?.innerText || '').trim().slice(0, 20000),
       bodyHtml: sanitize(bodyEl?.innerHTML || ''),
     };

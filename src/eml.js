@@ -1,3 +1,4 @@
+import { parseSmartDate } from './datefmt.js';
 // eml.js — pragmatisk .eml-parser (RFC822). Henter Fra/Til/Dato/Emne + body (text/html).
 // Dækker de almindelige tilfælde: foldede headers, encoded-words, multipart, quoted-printable/base64, UTF-8.
 // Komplekse/sjældne mails kan ramme grænser → vi fejler blødt (returnerer det vi kan).
@@ -80,18 +81,15 @@ export function parseEml(raw) {
   const headerText = split < 0 ? txt : txt.slice(0, split);
   const body = split < 0 ? '' : txt.slice(split + 2);
   const h = headerMap(headerText);
-  const d = h.date ? new Date(h.date) : null;
-  const valid = d && !isNaN(d);
-  const pad = (n) => String(n).padStart(2, '0');
+  const dt = parseSmartDate(h.date) || { date: '', time: '' };   // robust (RFC822 + fallback)
   const parts = pickBody(body, h['content-type'] || 'text/plain', h['content-transfer-encoding'] || '');
   return {
     subject: decodeWord(h.subject || '(uden emne)').trim(),
     from: decodeWord(h.from || '').trim(),
     to: decodeWord(h.to || '').trim(),
     dateText: h.date || '',
-    // LOKAL dato + tid (samme basis, så de aldrig modsiger hinanden ved døgnskifte — GLM-review)
-    date: valid ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : '',
-    time: valid ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : '',
+    date: dt.date,
+    time: dt.time,
     bodyText: (parts.text || '').trim().slice(0, 30000),
     bodyHtml: sanitizeHtml(parts.html || ''),
   };

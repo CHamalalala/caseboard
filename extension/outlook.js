@@ -17,11 +17,11 @@
       .find((s) => /@[\w.-]+\.\w+/.test(s.getAttribute('title') || s.getAttribute('aria-label') || s.textContent || s.getAttribute('href') || ''));
     const fromRaw = fromEl ? (fromEl.getAttribute('title') || fromEl.getAttribute('aria-label') || txt(fromEl) || (fromEl.getAttribute('href') || '').replace('mailto:', '')) : '';
     // dato: element hvis title/tekst kan parses som dato
-    const dateEl = [...root.querySelectorAll('span[title], time, [datetime]')]
-      .find((s) => !isNaN(new Date(s.getAttribute('datetime') || s.getAttribute('title') || s.textContent)));
-    const dateRaw = dateEl ? (dateEl.getAttribute('datetime') || dateEl.getAttribute('title') || txt(dateEl)) : '';
-    const d = new Date(dateRaw); const ok = !isNaN(d);
-    const pad = (x) => String(x).padStart(2, '0');
+    // saml dato-kandidater (maskinlæsbare først) → auto-dato (forstår danske/relative formater)
+    const cand = [];
+    for (const s of root.querySelectorAll('[datetime], time, span[title]')) cand.push(s.getAttribute('datetime'), s.getAttribute('title'), txt(s));
+    const dt = (window.__cbDate || {}).pickDate ? window.__cbDate.pickDate(cand.filter(Boolean)) : { date: new Date().toISOString().slice(0, 10), time: '' };
+    const dateRaw = cand.find(Boolean) || '';
     // brødtekst
     const bodyEl = root.querySelector('[aria-label="Meddelelsestekst"],[aria-label="Message body"],[role="document"],.allowTextSelection,.PlainText');
     return {
@@ -29,8 +29,8 @@
       from: fromRaw.trim(),
       to: '',
       dateText: dateRaw,
-      date: ok ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : new Date().toISOString().slice(0, 10),
-      time: ok ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : '',
+      date: dt.date,
+      time: dt.time,
       bodyText: txt(bodyEl).slice(0, 20000),
       bodyHtml: sanitize(bodyEl ? bodyEl.innerHTML : ''),
     };

@@ -2,11 +2,11 @@
 // VIGTIGT: cacher KUN app-koden. Sagsdata ligger i IndexedDB og rører aldrig nettet.
 // Strategi: NETWORK-FIRST (hent nyeste online, opdatér cache; fald tilbage til cache offline)
 // — så en ny version altid slår igennem, men appen stadig virker uden net.
-const CACHE = 'caseboard-v28';
+const CACHE = 'caseboard-v29';
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest',
   './src/app.js', './src/ui.js', './src/db.js', './src/model.js', './src/log.js', './src/errors.js',
-  './src/search.js', './src/export.js', './src/connectors.js', './src/extract.js', './src/summarize.js', './src/eml.js',
+  './src/search.js', './src/export.js', './src/connectors.js', './src/extract.js', './src/summarize.js', './src/eml.js', './src/datefmt.js',
   './vendor/minisearch.min.js', './vendor/fflate.min.js', './vendor/pdf.min.js', './vendor/pdf.worker.min.js',
   './icons/icon.svg',
 ];
