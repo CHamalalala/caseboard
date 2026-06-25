@@ -14,7 +14,9 @@ En lille, modulær PWA. Ingen build-step (ren HTML/CSS/JS), så den deployer dir
 | `src/extract.js` | Dokument-tekst: pdf.js (PDF) + fflate (.docx) + tekstfiler → søgbar tekst. Offline. |
 | `src/export.js` | Pakke-eksport (zip via fflate): Bilag/ + `Sagsoversigt.html` + gen-import-json + LÆS-MIG. `overviewHtml` genbruges til Print. |
 | `src/connectors.js` | SVG-tråde fra opsummeringer (frit lærred) → begivenheder; hver sin farve. Synkron tegning (rAF throttles i baggrund). |
-| `src/summarize.js` | EKSTRAKTIV opsummering (offline, deterministisk, **nul hallucination** — output ⊂ input) + overskrift-forslag. |
+| `src/summarize.js` | EKSTRAKTIV opsummering (nul hallucination) — nøglepunkter m. boilerplate-filter + længde-modes (kort/normal/lang). |
+| `src/eml.js` | Universal .eml-import (RFC822: encoded-words, QP/base64, multipart, modtage-tid); HTML renses (XSS). |
+| `src/model.js` (jura) | `claims`/`elements` (argumentkort), `claimStrength` (bevisbyrde + kumulativt killswitch + korroboration), `citations`, `DK_FRISTER`+`computeDeadline`. |
 | `extension/` | MV3 browser-udvidelse: "📎 Tilføj til sag" i Gmail → CaseBoard (nonce+origin-valideret `message`-modtager i app.js). |
 | `src/log.js` | ÉN log-kanal. | `src/errors.js` | TYPEDE fejl. |
 | `vendor/` | Lokale (offline) libs: `minisearch`, `fflate`, `pdf.min.js` + `pdf.worker.min.js`. Ingen CDN. |
