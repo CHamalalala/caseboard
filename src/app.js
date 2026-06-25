@@ -10,6 +10,7 @@ import { drawConnectors, clearConnectors } from './connectors.js';
 import { extractText } from './extract.js';
 import { keyPoints, suggestHeading, SUMMARY_MODES } from './summarize.js';
 import { parseEml } from './eml.js';
+import { encryptJson, decryptEnvelope, isEncryptedExport } from './crypto.js';
 
 const root = () => document.getElementById('app');
 const state = {
@@ -195,6 +196,37 @@ async function exportCaseObj(c) {
   } catch (e) { fail(Err.export('eksport fejlede', e)); }
 }
 async function exportCaseById(id) { const c = await db.getCase(id); if (c) exportCaseObj(c); }
+// lille adgangskode-modal (brugerens EGEN krypterings-kode til en eksport-fil) → Promise<string|null>
+function passwordPrompt({ title, sub, confirm }) {
+  return new Promise((resolve) => {
+    const inp = el('input', { class: 'f', type: 'password', placeholder: 'Adgangskode', autocomplete: 'new-password' });
+    const inp2 = confirm ? el('input', { class: 'f', type: 'password', placeholder: 'Gentag adgangskode', style: 'margin-top:8px', autocomplete: 'new-password' }) : null;
+    const errEl = el('div', { class: 'muted', style: 'color:#c62828;min-height:16px;margin-top:6px;font-style:normal' });
+    const close = (val) => { back.remove(); document.removeEventListener('keydown', onKey, true); resolve(val); };
+    const ok = () => { const p = inp.value; if (!p) { errEl.textContent = 'Indtast en adgangskode'; return; } if (confirm && p !== inp2.value) { errEl.textContent = 'Adgangskoderne er ikke ens'; return; } if (confirm && p.length < 6) { errEl.textContent = 'Mindst 6 tegn'; return; } close(p); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(null); } else if (e.key === 'Enter') { e.stopPropagation(); ok(); } };
+    const back = el('div', { class: 'modal-back', onclick: (e) => { if (e.target === back) close(null); } },
+      el('div', { class: 'modal' }, el('h3', {}, title || 'Adgangskode'), sub ? el('div', { class: 'muted', style: 'margin-bottom:8px;font-style:normal' }, sub) : null,
+        inp, inp2, errEl,
+        el('div', { class: 'modal-row' }, el('button', { class: 'btn ghost', onclick: () => close(null) }, 'Annullér'), el('button', { class: 'btn primary', onclick: ok }, 'OK'))));
+    document.body.append(back);
+    document.addEventListener('keydown', onKey, true);
+    setTimeout(() => inp.focus(), 30);
+  });
+}
+// 🔒 krypteret eksport (valgfrit, opt-in) — samme data som almindelig eksport, men AES-GCM-pakket m. adgangskode
+async function exportEncrypted(c) {
+  const pw = await passwordPrompt({ title: '🔒 Krypteret eksport', sub: 'Sæt en adgangskode — modtageren skal bruge SAMME kode. Mister du koden, kan filen IKKE gendannes.', confirm: true });
+  if (pw == null) return;
+  try {
+    toast('Krypterer …');
+    const out = { app: 'caseboard', exported: new Date().toISOString(), case: c, files: {} };
+    for (const fid of caseFileIds(c)) { const rec = await db.getFile(fid); if (rec) out.files[fid] = { name: rec.name, mime: rec.mime, b64: await blobToB64(rec.blob) }; }
+    const env = await encryptJson(JSON.stringify(out), pw);
+    el('a', { href: blobUrl(new Blob([JSON.stringify(env)], { type: 'application/json' })), download: (c.title || 'sag').replace(/\s+/g, '-') + '.caseboard.enc.json' }).click();
+    toast('Krypteret sag eksporteret 🔒', 'ok');
+  } catch (e) { fail(Err.export('kryptering fejlede', e)); }
+}
 // Eksportér som DELBAR PAKKE (zip: mappe m. Bilag/ + læsbar oversigt + gen-import-fil)
 async function exportShare(c) {
   try {
@@ -212,6 +244,12 @@ async function exportShare(c) {
   } catch (e) { fail(Err.export('pakke-eksport fejlede', e)); }
 }
 async function importData(data) {
+  if (isEncryptedExport(data)) {   // 🔒 krypteret sag → bed om adgangskode + dekryptér
+    const pw = await passwordPrompt({ title: '🔒 Krypteret sag', sub: 'Filen er beskyttet med en adgangskode.' });
+    if (pw == null) return;
+    let json; try { json = await decryptEnvelope(data, pw); } catch (e) { return fail(Err.import('Forkert adgangskode eller beskadiget fil')); }
+    try { data = JSON.parse(json); } catch (e) { return fail(Err.import('Kunne ikke læse den dekrypterede sag')); }
+  }
   if (!data || !data.case) throw Err.import('ikke en gyldig CaseBoard-fil');
   const c = data.case; c.id = uid('case'); c.updated = Date.now();
   const remap = {};
@@ -489,6 +527,7 @@ function renderCase() {
       el('button', { class: 'btn primary', onclick: addEventFromModal }, '➕ Indsæt bilag'),
       el('button', { class: 'btn', onclick: () => { state.tab = 'tidslinje'; addSummary(); } }, '＋ Opsummering'),
       el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil (til backup / gen-import)' }, '💾 Gem sag'),
+      el('button', { class: 'btn ghost', onclick: () => exportEncrypted(c), title: 'Eksportér sagen KRYPTERET med en adgangskode (til fortrolig deling)' }, '🔒'),
       el('button', { class: 'btn ghost', onclick: () => exportShare(c), title: 'Pak sagen som en mappe (Bilag + læsbar oversigt) — nem at dele med en kollega' }, '📦 Del'),
       el('button', { class: 'btn ghost', onclick: () => printChronology(c), title: 'Print en ren kronologi (til retten/møder) — vælg "Gem som PDF"' }, '🖨 Print')));
 
