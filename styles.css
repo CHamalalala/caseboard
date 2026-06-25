@@ -197,3 +197,7 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .fstatus{font-size:12px;font-weight:700;color:#8a6d1f}
 .fristrow.overdue .fstatus{color:#c62828}
 .dl-overdue{color:#c62828!important}.dl-soon{color:#e08a00!important}
+/* ===== Fase D: forbindelses-streger ===== */
+.sectionbody .layout{position:relative}
+.connectors .conn{fill:none;stroke:#e08a00;stroke-width:2.5;stroke-dasharray:5 4;opacity:.85}
+.connectors .conndot{fill:#e08a00;stroke:#fff;stroke-width:1.5}

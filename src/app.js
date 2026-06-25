@@ -6,6 +6,7 @@ import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, f
 import { el, toast, insertModal } from './ui.js';
 import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
 import { buildShareZip, overviewHtml } from './export.js';
+import { drawConnectors, clearConnectors } from './connectors.js';
 
 const root = () => document.getElementById('app');
 const state = {
@@ -253,7 +254,7 @@ function eventCard(ev) {
     el('button', { class: 'plus-btn', title: 'Føj til opsummering', onclick: (e) => { e.stopPropagation(); summaryPopover(e.currentTarget, ev); } }, '＋'),
     el('button', { class: 'mini del', title: 'Slet', onclick: (e) => { e.stopPropagation(); state.case.events = state.case.events.filter((x) => x.id !== ev.id); save(); renderCase(); } }, '✕'));
 
-  const card = el('div', { class: cls }, head);
+  const card = el('div', { class: cls, dataset: { id: ev.id } }, head);
   // tags: hvilke opsummeringer er begivenheden i
   const inSums = summariesForEvent(ev.id);
   if (inSums.length) card.append(el('div', { class: 'fane-tags' }, ...inSums.map((s) => el('span', { class: 'tag', onclick: () => selectSummary(s.id) }, '🏷 ' + (s.title || '…')))));
@@ -356,7 +357,23 @@ function renderCase() {
     : state.tab === 'frister' ? renderFrister(c)
     : state.tab === 'soeg' ? renderSoeg(c) : renderOverblik(c);
   root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, el('div', { class: 'sectionbody' }, view));
+  // forbindelses-streger: valgt opsummering → dens begivenheder (kun på tidslinjen)
+  if (state.tab === 'tidslinje' && state.selSummary) {
+    const s = (c.summaries || []).find((x) => x.id === state.selSummary);
+    requestAnimationFrame(() => { const layout = root().querySelector('.layout'); if (layout && s) drawConnectors(layout, s); });
+  } else clearConnectors();
 }
+let _redrawTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_redrawTimer);
+  _redrawTimer = setTimeout(() => {
+    if (state.view === 'case' && state.tab === 'tidslinje' && state.selSummary && state.case) {
+      const layout = root().querySelector('.layout');
+      const s = state.case.summaries.find((x) => x.id === state.selSummary);
+      if (layout && s) drawConnectors(layout, s);
+    }
+  }, 120);
+});
 
 // ---- Sektion: Tidslinje (begivenheder + opsummeringer) ----
 function renderTidslinje(c) {
