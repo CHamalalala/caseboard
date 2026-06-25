@@ -84,6 +84,8 @@ h2{font-size:15px;color:var(--blue);margin:4px 0 10px}
 .preview{margin:8px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fafbfe}
 .pv-img{display:block;max-width:100%;max-height:420px;margin:0 auto}
 .pv-pdf{width:100%;height:460px;border:0;display:block}
+.pv-mail{width:100%;min-height:280px;max-height:560px;border:1px solid var(--line,#e2e6ee);border-radius:8px;background:#fff;display:block}
+.pv-text{width:100%;max-height:460px;overflow:auto;margin:0;padding:14px;white-space:pre-wrap;word-break:break-word;font:13px/1.5 "Segoe UI",Arial,sans-serif;background:#fff;border:1px solid var(--line,#e2e6ee);border-radius:8px}
 .pv-doc{display:flex;flex-direction:column;align-items:center;gap:6px;padding:24px;text-align:center}
 .pv-ico{font-size:40px}.pv-missing{padding:20px;text-align:center;color:#a3360b}
 .doc-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}

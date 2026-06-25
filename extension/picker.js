@@ -25,6 +25,7 @@
   .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;margin:10px 0 4px}
   .in{width:100%;box-sizing:border-box;border:1px solid #d4d9e3;border-radius:9px;padding:9px 11px;font-size:14px;color:#14213d;background:#fff}
   .in:focus{outline:2px solid #1a7f37;border-color:#1a7f37}
+  .ta{min-height:78px;max-height:170px;resize:vertical;font:13px/1.45 "Segoe UI",Arial,sans-serif}
   .row2{display:flex;gap:8px}
   .row2 .in{flex:1}
   .search{margin:4px 0 8px}
@@ -63,6 +64,9 @@
       const date = h('input', { class: 'in', type: 'date', value: email.date || '' });
       const time = h('input', { class: 'in', type: 'time', value: email.time || '' });
       const from = h('input', { class: 'in', value: email.from || '', placeholder: 'Afsender' });
+      const bodyArea = h('textarea', { class: 'in ta', rows: '4', placeholder: 'Mailens indhold (følger med i sagen)' });
+      bodyArea.value = email.bodyText || '';
+      const origBody = email.bodyText || '';
       const search = h('input', { class: 'in search', type: 'search', placeholder: '🔎 Søg i sager…' });
 
       const addBtn = h('button', { class: 'btn add', disabled: 'true' }, 'Tilføj');
@@ -114,7 +118,12 @@
       document.addEventListener('keydown', onKey, true);
 
       addBtn.addEventListener('click', () => {
-        const edited = Object.assign({}, email, { subject: subj.value.trim() || '(uden emne)', date: date.value || email.date, time: time.value || '', from: from.value.trim() });
+        const editedBody = bodyArea.value;
+        const bodyChanged = editedBody !== origBody;   // redigeret tekst → brug den (ryd formateret html så teksten vises)
+        const edited = Object.assign({}, email, {
+          subject: subj.value.trim() || '(uden emne)', date: date.value || email.date, time: time.value || '', from: from.value.trim(),
+          bodyText: editedBody, bodyHtml: bodyChanged ? '' : email.bodyHtml,
+        });
         cleanup({ targets: { caseIds: [...sel], newCase }, email: edited });
       });
 
@@ -126,6 +135,8 @@
             subj,
             h('div', { class: 'row2', style: 'margin-top:8px' }, date, time),
             h('div', { style: 'margin-top:8px' }, from),
+            h('div', { class: 'lbl' }, 'Indhold'),
+            bodyArea,
             h('div', { class: 'lbl' }, 'Hvilke sager skal den i?'),
             search, list, newRow,
             h('div', { class: 'muted' }, 'Vælg én eller flere — tilføjes uden at forlade mailen.')),

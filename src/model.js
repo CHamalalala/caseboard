@@ -123,9 +123,11 @@ export function fileKind(mime = '', name = '') {
   if (m.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(n)) return 'image';
   if (m === 'application/pdf' || n.endsWith('.pdf')) return 'pdf';
   if (m.includes('word') || m.includes('officedocument') || /\.(docx?|rtf|odt)$/.test(n)) return 'word';
+  if (m === 'text/html' || /\.html?$/.test(n)) return 'mail';     // gemte mails (mailHtml) → vises inline
+  if (m === 'text/plain' || /\.(txt|md)$/.test(n)) return 'text';
   return 'other';
 }
-export const kindIcon = (k) => ({ image: '🖼️', pdf: '📄', word: '📝', other: '📎' }[k] || '📎');
+export const kindIcon = (k) => ({ image: '🖼️', pdf: '📄', word: '📝', mail: '📧', text: '📃', other: '📎' }[k] || '📎');
 
 // KERNE-LOGIK (testet): kronologisk sortering. ISO-datoer sorteres korrekt som strenge.
 export function sortEvents(events) {

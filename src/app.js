@@ -309,6 +309,9 @@ function previewInto(box, att) {
     const url = blobUrl(rec.blob);
     if (kind === 'image') box.append(el('img', { class: 'pv-img', src: url }));
     else if (kind === 'pdf') box.append(el('iframe', { class: 'pv-pdf', src: url + '#toolbar=0&view=FitH' }));
+    // mail (gemt .html): vis INLINE i sandboxed iframe (mailHtml er saniteret; sandbox='' = ingen scripts) → indholdet ses automatisk
+    else if (kind === 'mail') box.append(el('iframe', { class: 'pv-mail', src: url, sandbox: '' }));
+    else if (kind === 'text') box.append(el('pre', { class: 'pv-text' }, rec.text || ''));
     else box.append(el('div', { class: 'pv-doc' }, el('div', { class: 'pv-ico' }, kindIcon(kind)), el('div', {}, att.name), el('div', { class: 'muted' }, 'Forhåndsvisning ikke muligt for denne type — åbn originalen')));
   }).catch(fail);
 }
