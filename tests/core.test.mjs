@@ -1,5 +1,6 @@
 // Tests på "hjernen" (ren logik i model.js). Kør: node tests/core.test.mjs
 import { sortEvents, insertIndex, newEvent, daDate, deadlineStatus, sumMinutes, fmtMinutes, toHours } from '../src/model.js';
+import { extractiveSummary, suggestHeading } from '../src/summarize.js';
 import assert from 'node:assert/strict';
 
 let n = 0;
@@ -42,6 +43,16 @@ test('timeregnskab summerer + formaterer korrekt', () => {
   assert.equal(toHours(180), '3.0');
   assert.equal(fmtMinutes(90), '1 t 30 min');
   assert.equal(fmtMinutes(45), '45 min');
+});
+
+test('ekstraktiv opsummering opfinder ALDRIG ny tekst (nul hallucination)', () => {
+  const txt = 'Klienten ringede den 3. marts om en tvist. Modparten afviste kravet fuldstændigt. Vi sendte et påkrav med kort frist. Sagen kan ende i retten hvis der ikke findes en løsning. Honoraret aftales særskilt med klienten.';
+  const norm = txt.replace(/\s+/g, ' ');
+  const sum = extractiveSummary(txt, 2);
+  for (const s of sum.split(/(?<=[.!?])\s+/)) assert.ok(norm.includes(s.trim()), 'ny tekst lækket: ' + s);
+  // overskrift er også et eksisterende uddrag (evt. afkortet)
+  const h = suggestHeading(txt).replace(/…$/, '');
+  assert.ok(norm.includes(h.trim()), 'overskrift indeholdt ny tekst');
 });
 
 console.log(`\nAlle ${n} tests grønne ✓`);

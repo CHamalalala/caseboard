@@ -8,6 +8,7 @@ import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './
 import { buildShareZip, overviewHtml } from './export.js';
 import { drawConnectors, clearConnectors } from './connectors.js';
 import { extractText } from './extract.js';
+import { extractiveSummary, suggestHeading } from './summarize.js';
 
 const root = () => document.getElementById('app');
 const state = {
@@ -116,6 +117,21 @@ async function reindexDocs(c, onProgress) {
     onProgress && onProgress(done, ids.length);
   }
   return { total: ids.length, added };
+}
+
+// saml al tekst for en begivenhed (titel/note/parter + udtrukket dokument-tekst) — til ekstraktiv AI
+async function eventText(ev) {
+  const parts = [ev.body, ev.parties].filter(Boolean);
+  for (const a of ev.attachments || []) { const rec = await db.getFile(a.fileId); if (rec && rec.text) parts.push(rec.text); }
+  return parts.join('\n');
+}
+function renderAi(box, ev, label, text, isHeading) {
+  box.replaceChildren(
+    el('div', { class: 'ai-label' }, '✨ ' + label + ' — uddrag, ingen ny tekst'),
+    el('div', { class: 'ai-text' }, text || '(ingen tekst at opsummere endnu — tilføj en note eller indeksér dokumentet)'),
+    text ? el('div', { class: 'ai-apply' }, isHeading
+      ? el('button', { class: 'btn sm', onclick: () => { patch(ev, 'title', text); renderCase(); } }, '🏷 Brug som overskrift')
+      : el('button', { class: 'btn sm', onclick: () => { ev.body = (ev.body ? ev.body + '\n\n' : '') + text; save(); renderCase(); } }, '📋 Indsæt i note')) : null);
 }
 
 function patch(obj, key, val) { obj[key] = val; save(); }
@@ -310,6 +326,12 @@ function eventCard(ev) {
         ...ppl.map((p) => el('span', { class: 'ptag' + (ev.people.includes(p.id) ? ' on' : ''),
           onclick: () => { ev.people = ev.people.includes(p.id) ? ev.people.filter((x) => x !== p.id) : [...ev.people, p.id]; save(); renderCase(); } }, p.name))));
     }
+    // ✨ ekstraktiv AI (offline, deterministisk, ingen hallucination)
+    const aiBox = el('div', { class: 'aibox' });
+    body.append(el('div', { class: 'ai-actions' },
+      el('button', { class: 'btn ghost sm', onclick: async () => { aiBox.replaceChildren(el('span', { class: 'muted sm' }, 'Læser tekst …')); renderAi(aiBox, ev, 'Opsummering', extractiveSummary(await eventText(ev), 3)); } }, '✨ Opsummér (uddrag)'),
+      el('button', { class: 'btn ghost sm', onclick: async () => { renderAi(aiBox, ev, 'Foreslået overskrift', suggestHeading(await eventText(ev)), true); } }, '✨ Foreslå overskrift')),
+      aiBox);
     card.append(body);
   }
   return card;
