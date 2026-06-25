@@ -28,6 +28,26 @@ export function newEvent(p = {}) {
 }
 
 export const ROLES = ['Klient', 'Modpart', 'Vidne', 'Advokat', 'Dommer', 'Andet'];
+// DK frist-motor — vejledende danske procesfrister (advokat verificerer altid; ikke juridisk rådgivning)
+export const DK_FRISTER = [
+  { id: 'anke_civil', label: 'Ankefrist, civil dom', days: 28 },
+  { id: 'kaeremaal', label: 'Kæremål (kendelse)', days: 14 },
+  { id: 'anke_straf', label: 'Ankefrist, straffedom', days: 14 },
+  { id: 'svarfrist', label: 'Svarfrist (svarskrift)', days: 14 },
+  { id: 'fuldbyrdelse', label: 'Fuldbyrdelsesfrist (dom)', days: 14 },
+  { id: 'fortrydelse', label: 'Fortrydelsesret (forbruger)', days: 14 },
+  { id: '3instans', label: '3.-instansbevilling (Procesbevillingsnævnet)', days: 28 },
+];
+// dato + dage → ny dato; ruller frem til næste hverdag ved weekend (rpl. §148a; helligdage IKKE medregnet)
+export function computeDeadline(dateStr, days) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + Number(days || 0));
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export function newTimeEntry(p = {}) { return { id: uid('t'), date: p.date || today(), minutes: p.minutes || 0, note: p.note || '' }; }
 export const sumMinutes = (entries) => (entries || []).reduce((s, e) => s + (Number(e.minutes) || 0), 0);
 export function fmtMinutes(m) { m = Math.round(m || 0); const h = Math.floor(m / 60); return h ? `${h} t ${m % 60} min` : `${m} min`; }

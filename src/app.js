@@ -2,7 +2,7 @@
 import { log } from './log.js';
 import { Err, AppError } from './errors.js';
 import * as db from './db.js';
-import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon, ROLES, newPerson, newDeadline, deadlineStatus, SUMMARY_COLORS, newTimeEntry, sumMinutes, fmtMinutes, toHours } from './model.js';
+import { newCase, newEvent, newSummary, sortEvents, daDate, TYPES, today, uid, fileKind, kindIcon, ROLES, newPerson, newDeadline, deadlineStatus, SUMMARY_COLORS, newTimeEntry, sumMinutes, fmtMinutes, toHours, DK_FRISTER, computeDeadline } from './model.js';
 import { el, toast, insertModal } from './ui.js';
 import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
 import { buildShareZip, overviewHtml } from './export.js';
@@ -619,10 +619,20 @@ function renderPersoner(c) {
 // ---- Sektion: Frister ----
 function renderFrister(c) {
   c.deadlines = c.deadlines || [];
+  const fd = el('input', { type: 'date', value: today(), class: 'fdate' });
+  const ft = el('select', { class: 'roleselect' }, ...DK_FRISTER.map((x) => el('option', { value: x.id }, x.label + ' (' + x.days + ' dage)')));
   const wrap = el('div', { class: 'fristview' },
     el('div', { class: 'pv-bar' },
       el('button', { class: 'btn primary', onclick: () => { c.deadlines.unshift(newDeadline()); save(); renderCase(); } }, '➕ Tilføj frist'),
-      el('span', { class: 'muted sm' }, 'Rød = overskredet · orange = inden for 7 dage. (Visuelt — der sendes ingen besked.)')));
+      el('span', { class: 'muted sm' }, 'Rød = overskredet · orange = inden for 7 dage. (Visuelt — der sendes ingen besked.)')),
+    el('div', { class: 'tidform' }, el('span', { class: 'muted sm' }, '⏰ Beregn dansk frist:'), fd, ft,
+      el('button', { class: 'btn', onclick: () => {
+        const t = DK_FRISTER.find((x) => x.id === ft.value); if (!t) return;
+        const date = computeDeadline(fd.value, t.days);
+        c.deadlines.unshift(newDeadline({ date, title: t.label })); save(); renderCase();
+        toast('Frist beregnet: ' + daDate(date), 'ok');
+      } }, '➕ Beregn & tilføj'),
+      el('span', { class: 'muted sm' }, 'Vejledende — verificér altid (helligdage ej medregnet).')));
   if (!c.deadlines.length) { wrap.append(el('p', { class: 'muted' }, 'Ingen frister endnu.')); return wrap; }
   for (const d of [...c.deadlines].sort((a, b) => a.date < b.date ? -1 : 1)) {
     const st = d.done ? 'done' : deadlineStatus(d.date);

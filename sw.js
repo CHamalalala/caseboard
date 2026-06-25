@@ -2,7 +2,7 @@
 // VIGTIGT: cacher KUN app-koden. Sagsdata ligger i IndexedDB og rører aldrig nettet.
 // Strategi: NETWORK-FIRST (hent nyeste online, opdatér cache; fald tilbage til cache offline)
 // — så en ny version altid slår igennem, men appen stadig virker uden net.
-const CACHE = 'caseboard-v21';
+const CACHE = 'caseboard-v23';
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest',
   './src/app.js', './src/ui.js', './src/db.js', './src/model.js', './src/log.js', './src/errors.js',
@@ -21,7 +21,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request)
+    // cache:'no-cache' → revalidér altid mod serveren, så ny kode ALTID slår igennem (ikke stale HTTP-cache)
+    fetch(e.request, { cache: 'no-cache' })
       .then((resp) => {
         const copy = resp.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});

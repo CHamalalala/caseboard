@@ -1,5 +1,5 @@
 // Tests på "hjernen" (ren logik i model.js). Kør: node tests/core.test.mjs
-import { sortEvents, insertIndex, newEvent, daDate, deadlineStatus, sumMinutes, fmtMinutes, toHours } from '../src/model.js';
+import { sortEvents, insertIndex, newEvent, daDate, deadlineStatus, sumMinutes, fmtMinutes, toHours, computeDeadline } from '../src/model.js';
 import { extractiveSummary, suggestHeading } from '../src/summarize.js';
 import assert from 'node:assert/strict';
 
@@ -53,6 +53,11 @@ test('ekstraktiv opsummering opfinder ALDRIG ny tekst (nul hallucination)', () =
   // overskrift er også et eksisterende uddrag (evt. afkortet)
   const h = suggestHeading(txt).replace(/…$/, '');
   assert.ok(norm.includes(h.trim()), 'overskrift indeholdt ny tekst');
+});
+
+test('DK frist-motor: ankefrist 4 uger + weekend-rul', () => {
+  assert.equal(computeDeadline('2026-06-25', 28), '2026-07-23');     // 4 uger frem, hverdag
+  assert.equal(computeDeadline('2026-07-25', 0), '2026-07-27');      // lørdag → ruller til mandag
 });
 
 console.log(`\nAlle ${n} tests grønne ✓`);
