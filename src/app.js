@@ -945,7 +945,7 @@ async function applyMailOpts(c, opts) {
 async function addFilesToCase(c, files, mail, mailEv) {
   let added = 0; const noted = [];
   for (const f of (files || [])) {
-    if (f && f.dataUrl) {
+    if (f && typeof f.dataUrl === 'string' && f.dataUrl.startsWith('data:')) {   // KUN data:-URLs (aldrig fetch eksternt fra en besked)
       try {
         const blob = await (await fetch(f.dataUrl)).blob();
         const fileId = uid('file');

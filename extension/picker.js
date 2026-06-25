@@ -187,8 +187,12 @@
     const out = []; let total = 0;
     for (const a of (atts || [])) {
       if (!a || !a.url) { out.push({ name: a && a.name, mime: a && a.mime, missing: true }); continue; }
+      // SSRF/credential-guard (GLM): hent KUN same-origin URL'er med session — en manipuleret mail må ALDRIG
+      // få os til at fetche en ekstern adresse med brugerens cookies. Legit Gmail-bilag er same-origin.
+      let u; try { u = new URL(a.url, location.href); } catch (e) { out.push({ name: a.name, mime: a.mime, missing: true }); continue; }
+      if (u.origin !== location.origin) { out.push({ name: a.name, mime: a.mime, missing: true }); continue; }
       try {
-        const resp = await fetch(a.url, { credentials: 'include' });
+        const resp = await fetch(u.href, { credentials: 'same-origin' });
         if (!resp.ok) { out.push({ name: a.name, mime: a.mime, missing: true }); continue; }
         const blob = await resp.blob();
         if (blob.size > MAX_FILE || total + blob.size > MAX_TOTAL) { out.push({ name: a.name, mime: a.mime, tooBig: true }); continue; }
