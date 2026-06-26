@@ -16,7 +16,7 @@ const root = () => document.getElementById('app');
 const state = {
   view: 'home', case: null, cases: [], history: [],
   openCaseObjs: {}, openOrder: [], activeCaseId: null, tab: 'overblik',  // faner: åbne sager + sektion
-  expanded: new Set(), selEvent: null, selSummary: null,
+  expanded: new Set(), selEvent: null, selSummary: null, _hoverSummary: null,  // _hoverSummary: tråde vises on-demand ved hover
   tlFilter: { types: new Set(), tags: new Set() },   // filtre på tidslinjen
   editMode: false,                                    // tidslinje-tekst er read-only indtil dette slås til
   timer: null,                                        // {caseId, start} når en tids-timer kører
@@ -483,6 +483,9 @@ function summaryCard(su, i = 0) {
     dataset: { sid: su.id },
     style: `position:absolute;left:${su.x}px;top:${su.y}px;border-left-color:${su.color}`,
   });
+  // hover fremkalder denne opsummerings tråde (også når en anden er fast-valgt → preview nabo); hover har forrang
+  card.addEventListener('mouseenter', () => { state._hoverSummary = su.id; redrawThreads(); });
+  card.addEventListener('mouseleave', () => { if (state._hoverSummary !== su.id) return; state._hoverSummary = null; redrawThreads(); });  // ryd ALTID (ellers ghost-hover ved klik, GLM-review)
   const grip = el('span', { class: 'grip', title: 'Træk for at flytte' }, '⠿');
   card.append(
     el('div', { class: 'su-head', onclick: () => selectSummary(su.id) },
@@ -544,6 +547,7 @@ function casetabsStrip() {
 
 function renderCase() {
   revokeUrls();
+  state._hoverSummary = null;  // fuld re-render fjerner hover-DOM'en → nulstil (ellers ghost-hover-tråde, GLM-review)
   const c = state.case;
   document.body.classList.toggle('editing', !!state.editMode);
   const topbar = el('header', { class: 'topbar' },
@@ -578,10 +582,10 @@ function renderCase() {
   sb.addEventListener('dragleave', (e) => { if (e.target === sb) sb.classList.remove('drop-active'); });
   sb.addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f && /\.eml$/i.test(f.name)) { e.preventDefault(); sb.classList.remove('drop-active'); routeDroppedFile(f); } });
   root().replaceChildren(topbar, casetabsStrip(), casehead, sectiontabs, sb);
-  // forbindelses-tråde: ALLE opsummeringer (hver sin farve); valgt fremhæves (kun på tidslinjen).
+  // forbindelses-tråde: KUN den valgte/hover'ede opsummerings tråde (on-demand → rent lærred ellers).
   // Synkront (getBoundingClientRect tvinger layout) — mere robust end rAF, der throttles i baggrunds-faner.
   if (state.tab === 'tidslinje') {
-    const layout = root().querySelector('.layout'); if (layout) drawConnectors(layout, c.summaries || [], state.selSummary);
+    const layout = root().querySelector('.layout'); if (layout) drawConnectors(layout, c.summaries || [], state._hoverSummary || state.selSummary);
     if (state.scrollTo) {
       const id = state.scrollTo; state.scrollTo = null;
       setTimeout(() => {
@@ -600,7 +604,7 @@ function renderCase() {
 function redrawThreads() {
   if (state.view === 'case' && state.tab === 'tidslinje' && state.case) {
     const layout = root().querySelector('.layout');
-    if (layout) drawConnectors(layout, state.case.summaries || [], state.selSummary);
+    if (layout) drawConnectors(layout, state.case.summaries || [], state._hoverSummary || state.selSummary);
   }
 }
 let _rafPending = false;     // GLM-review: batch gen-tegning under træk (undgå perf-bombe)
