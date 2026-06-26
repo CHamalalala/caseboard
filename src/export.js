@@ -6,6 +6,9 @@ import { daDate, sortEvents } from './model.js';
 
 const safe = (s) => (s || 'fil').replace(/[\\/:*?"<>|\n\r]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 90);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// rene inline-SVG-ikoner (samme stil som app'en) i stedet for emojis i den eksporterede HTML
+const SVG_SCALE = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#a3360b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px" aria-hidden="true"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>';
+const SVG_CLIP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
 
 // fileRecs: { fileId: { name, mime, bytes:Uint8Array } } ; jsonString: indholdet af .caseboard.json
 export function buildShareZip(c, fileRecs, jsonString) {
@@ -35,7 +38,7 @@ export function buildShareZip(c, fileRecs, jsonString) {
 export function overviewHtml(c, evs, bilagPath) {
   const row = (ev) => {
     const links = (ev.attachments || []).map((a) => bilagPath[a.fileId]
-      ? `<a href="${esc(bilagPath[a.fileId])}">📎 ${esc(a.name)}</a>` : `<span>📎 ${esc(a.name)}</span>`).join(' ');
+      ? `<a href="${esc(bilagPath[a.fileId])}">${SVG_CLIP}${esc(a.name)}</a>` : `<span>${SVG_CLIP}${esc(a.name)}</span>`).join(' ');
     return `<div class="ev"><div class="d">${esc(daDate(ev.date))}</div><div class="c">
       <div class="t"><span class="k">${esc(ev.type || '')}</span> ${esc(ev.title)}</div>
       ${ev.parties ? `<div class="p">${esc(ev.parties)}</div>` : ''}
@@ -56,7 +59,7 @@ body{font-family:"Segoe UI",Arial,sans-serif;color:#1a1a1a;background:#f4f6fb;ma
 .su{background:#fff;border:1px solid #e2e6ee;border-left:4px solid #a3360b;border-radius:8px;padding:10px 14px;margin:0 0 10px}.su h3{margin:0 0 6px;color:#14213d}
 .note{color:#5b6678;font-size:13px;margin:6px 0 18px}
 </style></head><body><div class="wrap">
-<h1>⚖️ ${esc(c.title)}</h1>
+<h1>${SVG_SCALE}${esc(c.title)}</h1>
 <div class="note">Sagsoversigt genereret af CaseBoard. Klik et bilag for at åbne originalen (ligger i mappen <b>Bilag/</b>).
 For at redigere sagen: åbn CaseBoard og importér <b>sag.caseboard.json</b>.</div>
 ${Object.keys(c.meta || {}).length ? `<p>${Object.entries(c.meta).map(([k, v]) => `<b>${esc(k)}:</b> ${esc(v)}`).join(' &nbsp;·&nbsp; ')}</p>` : ''}

@@ -8,6 +8,7 @@ import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './
 import { buildShareZip, overviewHtml } from './export.js';
 import { drawConnectors, clearConnectors } from './connectors.js';
 import { icon } from './icons.js';
+import { buildLockedViewer } from './viewer.js';
 import { extractText } from './extract.js';
 import { keyPoints, suggestHeading, SUMMARY_MODES } from './summarize.js';
 import { parseEml } from './eml.js';
@@ -230,7 +231,7 @@ function passwordPrompt({ title, sub, confirm }) {
 }
 // 🔒 krypteret eksport (valgfrit, opt-in) — samme data som almindelig eksport, men AES-GCM-pakket m. adgangskode
 async function exportEncrypted(c) {
-  const pw = await passwordPrompt({ title: '🔒 Krypteret eksport', sub: 'Sæt en adgangskode — modtageren skal bruge SAMME kode. Mister du koden, kan filen IKKE gendannes.', confirm: true });
+  const pw = await passwordPrompt({ title: 'Krypteret eksport', sub: 'Sæt en adgangskode — modtageren skal bruge SAMME kode. Mister du koden, kan filen IKKE gendannes.', confirm: true });
   if (pw == null) return;
   try {
     toast('Krypterer …');
@@ -238,7 +239,7 @@ async function exportEncrypted(c) {
     for (const fid of caseFileIds(c)) { const rec = await db.getFile(fid); if (rec) out.files[fid] = { name: rec.name, mime: rec.mime, b64: await blobToB64(rec.blob) }; }
     const env = await encryptJson(JSON.stringify(out), pw);
     el('a', { href: blobUrl(new Blob([JSON.stringify(env)], { type: 'application/json' })), download: (c.title || 'sag').replace(/\s+/g, '-') + '.caseboard.enc.json' }).click();
-    toast('Krypteret sag eksporteret 🔒', 'ok');
+    toast('Krypteret sag eksporteret', 'ok');
   } catch (e) { fail(Err.export('kryptering fejlede', e)); }
 }
 // Eksportér som DELBAR PAKKE (zip: mappe m. Bilag/ + læsbar oversigt + gen-import-fil)
@@ -257,9 +258,23 @@ async function exportShare(c) {
     toast('Pakke klar: ' + folder + '.zip — udpak og del mappen', 'ok');
   } catch (e) { fail(Err.export('pakke-eksport fejlede', e)); }
 }
+// LÅST krypteret read-only viewer (til en advokat): én HTML-fil der KUN viser sagen, kræver adgangskode du holder.
+// Ingen authoring, intet værktøj — sags-data er AES-256-krypteret og findes aldrig i klartekst i filen.
+async function exportLockedViewer(c) {
+  const pw = await passwordPrompt({ title: 'Låst viewer til advokat', sub: 'Sæt adgangskoden modtageren skal bruge for at åbne filen. KUN du bør kende den — giv den til advokaten separat (ikke i samme mail). Mister du den, kan filen ikke åbnes.', confirm: true });
+  if (pw == null) return;
+  try {
+    toast('Bygger låst viewer …');
+    const filesObj = {};
+    for (const fid of caseFileIds(c)) { const rec = await db.getFile(fid); if (rec) filesObj[fid] = { name: rec.name, mime: rec.mime, b64: await blobToB64(rec.blob) }; }
+    const html = await buildLockedViewer(c, filesObj, pw);
+    el('a', { href: blobUrl(new Blob([html], { type: 'text/html' })), download: (c.title || 'sag').replace(/\s+/g, '-') + '.viewer.html' }).click();
+    toast('Låst viewer klar — del filen, og giv koden separat', 'ok');
+  } catch (e) { fail(Err.export('viewer-byg fejlede', e)); }
+}
 async function importData(data) {
   if (isEncryptedExport(data)) {   // 🔒 krypteret sag → bed om adgangskode + dekryptér
-    const pw = await passwordPrompt({ title: '🔒 Krypteret sag', sub: 'Filen er beskyttet med en adgangskode.' });
+    const pw = await passwordPrompt({ title: 'Krypteret sag', sub: 'Filen er beskyttet med en adgangskode.' });
     if (pw == null) return;
     let json; try { json = await decryptEnvelope(data, pw); } catch (e) { return fail(Err.import('Forkert adgangskode eller beskadiget fil')); }
     try { data = JSON.parse(json); } catch (e) { return fail(Err.import('Kunne ikke læse den dekrypterede sag')); }
@@ -312,7 +327,7 @@ function caseCard(c) {
     c.updated ? el('div', { class: 'cc-meta sub' }, 'Senest ændret ' + new Date(c.updated).toLocaleDateString('da-DK')) : null,
     el('div', { class: 'cc-actions' },
       el('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); openCaseById(c.id); } }, 'Åbn'),
-      el('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); exportCaseById(c.id); } }, '⤓'),
+      el('button', { class: 'btn ghost sm', title: 'Gem sag som fil', onclick: (e) => { e.stopPropagation(); exportCaseById(c.id); } }, icon('download')),
       el('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); deleteCase(c.id); } }, icon('trash'))));
 }
 function renderHome() {
@@ -332,7 +347,7 @@ function renderHome() {
         el('button', { class: 'btn primary', onclick: createCase }, icon('plus'), 'Opret ny sag'),
         openSagBtn('Åbn en sag'),
         el('button', { class: 'btn', onclick: loadDemo }, icon('sparkles'), 'Se et eksempel')),
-      el('div', { class: 'dropnote' }, '⤓ … eller træk en sagsfil — eller en mail (.eml) — ind her'),
+      el('div', { class: 'dropnote' }, icon('download'), ' … eller træk en sagsfil — eller en mail (.eml) — ind her'),
       el('p', { class: 'hint muted' }, '“Åbn en sag” henter en sagsfil du har gemt eller fået tilsendt.')));
   } else {
     body.append(globalSearchBar(), el('div', { class: 'casegrid' }, ...state.cases.sort((a, b) => (b.updated || 0) - (a.updated || 0)).map(caseCard),
@@ -389,7 +404,7 @@ function previewInto(box, att) {
       // "Vis billeder": opt-in genindlæsning uden billed-blokering (default-CSP blokerer eksterne billeder/tracking-pixels)
       const imgBtn = el('button', { class: 'btn ghost sm', style: 'margin-top:6px', onclick: async () => {
         try { const t = await rec.blob.text(); const relaxed = /img-src/i.test(t) ? t.replace(/img-src[^;]*/i, 'img-src https: data: blob:') : t.replace(/(default-src[^;]*;)/i, "$1 img-src https: data: blob:;"); ifr.src = blobUrl(new Blob([relaxed], { type: 'text/html' })); imgBtn.remove(); } catch (e) { fail(e); }
-      } }, '🖼 Vis billeder');
+      } }, 'Vis billeder');
       box.append(imgBtn);
     }
     else if (kind === 'text') box.append(el('pre', { class: 'pv-text' }, rec.text || ''));
@@ -410,7 +425,7 @@ function eventCard(ev) {
     el('span', { class: 'date' }, daDate(ev.date) + (ev.time ? ' ' + ev.time : '')),
     el('span', { class: 'ficon' }, att ? kindIcon(kind) : '•'),
     editable('span', ev.title, (v) => patch(ev, 'title', v), 'title', true),
-    ev.strength ? el('span', { class: 'str-badge', title: 'Bevis-styrke ' + ev.strength + '/5' }, '💪' + ev.strength) : null,
+    ev.strength ? el('span', { class: 'str-badge', title: 'Bevis-styrke ' + ev.strength + '/5' }, '' + ev.strength) : null,
     el('button', { class: 'plus-btn', title: 'Føj til opsummering', onclick: (e) => { e.stopPropagation(); summaryPopover(e.currentTarget, ev); } }, '＋'),
     el('button', { class: 'mini del', title: 'Slet', onclick: (e) => { e.stopPropagation(); state.case.events = state.case.events.filter((x) => x.id !== ev.id); cleanupRefs(ev.id); save(); renderCase(); } }, '✕'));
 
@@ -422,10 +437,10 @@ function eventCard(ev) {
   if (open) {
     const body = el('div', { class: 'fane-body' });
     if (state.editMode) body.append(el('div', { class: 'dt-edit' },
-      el('span', { class: 'muted sm' }, '📅 Dato / tid:'),
+      el('span', { class: 'muted sm' }, 'Dato / tid:'),
       el('input', { type: 'date', value: ev.date, class: 'fdate', onchange: (e) => { patch(ev, 'date', e.target.value); renderCase(); } }),
       el('input', { type: 'time', value: ev.time || '', class: 'fdate', onchange: (e) => patch(ev, 'time', e.target.value) }),
-      el('span', { class: 'muted sm', style: 'margin-left:10px' }, '💪 Bevis-styrke:'),
+      el('span', { class: 'muted sm', style: 'margin-left:10px' }, 'Bevis-styrke:'),
       ...[1, 2, 3, 4, 5].map((nn) => el('span', { class: 'star' + ((ev.strength || 0) >= nn ? ' on' : ''), onclick: () => { patch(ev, 'strength', ev.strength === nn ? 0 : nn); renderCase(); } }, '★'))));
     if (att) {
       const pv = el('div', { class: 'preview' }); previewInto(pv, att); body.append(pv);
@@ -564,6 +579,7 @@ function renderCase() {
       el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil (til backup / gen-import)' }, icon('download'), 'Gem sag'),
       el('button', { class: 'btn ghost', onclick: () => exportEncrypted(c), title: 'Eksportér sagen KRYPTERET med en adgangskode (til fortrolig deling)', 'aria-label': 'Krypteret eksport' }, icon('lock')),
       el('button', { class: 'btn ghost', onclick: () => exportShare(c), title: 'Pak sagen som en mappe (Bilag + læsbar oversigt) — nem at dele med en kollega' }, icon('share'), 'Del'),
+      el('button', { class: 'btn ghost', onclick: () => exportLockedViewer(c), title: 'Lav en LÅST, krypteret read-only fil til en advokat — kun visning, intet værktøj, kræver adgangskode du holder' }, icon('shield'), 'Låst viewer'),
       el('button', { class: 'btn ghost', onclick: () => printChronology(c), title: 'Print en ren kronologi (til retten/møder) — vælg "Gem som PDF"' }, icon('printer'), 'Print')));
 
   const counts = { tidslinje: c.events.length, argumenter: (c.claims || []).length, dokumenter: caseFileIds(c).length, personer: (c.people || []).length, frister: (c.deadlines || []).length, tid: (c.timeEntries || []).length };
@@ -632,12 +648,12 @@ function renderTidslinje(c) {
         el('button', { class: 'mini-btn', onclick: () => { evs.forEach((e) => state.expanded.add(e.id)); renderCase(); } }, 'Udvid alle'),
         el('button', { class: 'mini-btn', onclick: () => { state.expanded.clear(); renderCase(); } }, 'Fold alle')) : null),
     filterbar,
-    ...(evs.length ? evs.map(eventCard) : [el('p', { class: 'muted' }, all.length ? 'Ingen begivenheder matcher filteret.' : 'Ingen bilag endnu. Tryk “➕ Indsæt bilag” og upload et dokument, en PDF eller et billede.')]));
+    ...(evs.length ? evs.map(eventCard) : [el('p', { class: 'muted' }, all.length ? 'Ingen begivenheder matcher filteret.' : 'Ingen bilag endnu. Tryk “Indsæt bilag” og upload et dokument, en PDF eller et billede.')]));
   const sums = c.summaries || [];
   const maxY = sums.reduce((m, s) => Math.max(m, s.y || 0), 0);
   const maxX = sums.reduce((m, s) => Math.max(m, s.x || 0), 0);
   const canvas = el('div', { class: 'canvas', style: `min-height:${Math.max(440, maxY + 260)}px;min-width:${Math.max(300, maxX + 330)}px` },
-    el('div', { class: 'canvas-hint' }, '🎨 Frit lærred — træk opsummeringerne rundt; hver har sin egen farve på trådene.',
+    el('div', { class: 'canvas-hint' }, 'Frit lærred — træk opsummeringerne rundt; hver har sin egen farve på trådene.',
       sums.length > 1 ? el('button', { class: 'mini-btn', style: 'margin-left:10px', onclick: arrangeSummaries, title: 'Stil opsummeringerne pænt op uden overlap' }, icon('arrange'), 'Arranger') : null),
     ...(sums.length ? sums.map((s, i) => summaryCard(s, i)) : [el('p', { class: 'muted canvas-empty' }, 'Ingen opsummeringer endnu — tryk “＋ Opsummering” i toppen.')]));
   return el('div', { class: 'layout' }, timeline, canvas);
@@ -677,7 +693,7 @@ function renderOverblik(c) {
 function renderDokumenter(c) {
   const rows = [];
   for (const ev of sortEvents(c.events)) for (const a of ev.attachments || []) rows.push({ a, ev });
-  if (!rows.length) return el('div', { class: 'muted' }, 'Ingen dokumenter endnu. Upload via “➕ Indsæt bilag”.');
+  if (!rows.length) return el('div', { class: 'muted' }, 'Ingen dokumenter endnu. Upload via “Indsæt bilag”.');
   return el('div', { class: 'doclist' }, ...rows.map(({ a, ev }) =>
     el('div', { class: 'docrow' },
       el('span', { class: 'ficon' }, kindIcon(fileKind(a.mime, a.name))),
@@ -789,7 +805,7 @@ function renderArgumenter(c) {
         el('div', { class: 'el-main' },
           editable('div', elx.text, (v) => patch(elx, 'text', v), 'el-text'),
           el('div', { class: 'el-meta' },
-            el('span', { class: 'burden-toggle', title: 'Hvem har bevisbyrden? Et hul er kun en trussel hvis DU har byrden.', onclick: () => { patch(elx, 'burden', (elx.burden || 'mig') === 'mig' ? 'modpart' : 'mig'); renderCase(); } }, 'Bevisbyrde: ' + ((elx.burden || 'mig') === 'mig' ? '🟦 mig' : '🟧 modpart')),
+            el('span', { class: 'burden-toggle', title: 'Hvem har bevisbyrden? Et hul er kun en trussel hvis DU har byrden.', onclick: () => { patch(elx, 'burden', (elx.burden || 'mig') === 'mig' ? 'modpart' : 'mig'); renderCase(); } }, 'Bevisbyrde: ' + ((elx.burden || 'mig') === 'mig' ? 'mig' : 'modpart')),
             el('label', { class: 'ess-toggle', title: 'Afgørende (kumulativt) krav — ét sådant hul gør påstanden død' },
               el('input', elx.essential !== false ? { type: 'checkbox', checked: 'checked', onchange: essChk } : { type: 'checkbox', onchange: essChk }), ' afgørende')),
           el('div', { class: 'el-ev' },
@@ -798,8 +814,8 @@ function renderArgumenter(c) {
             el('button', { class: 'plus-btn', title: 'Knyt bevis', onclick: (e) => { e.stopPropagation(); eventPickerPopover(e.currentTarget, c, (id) => { if (!elx.evidence.includes(id)) { elx.evidence.push(id); save(); renderCase(); } }); } }, '＋'),
             status === 'hul' ? el('span', { class: 'gap-flag' }, '⚠ mangler bevis') : status === 'modpart' ? el('span', { class: 'opp-flag' }, '✓ modparten skal bevise dette') : null)),
         el('div', { class: 'el-args' },
-          el('div', { class: 'arg-col' }, el('div', { class: 'arg-label' }, '⚔ Modpartens indsigelse'), editable('div', elx.objection, (v) => patch(elx, 'objection', v), 'arg-text')),
-          el('div', { class: 'arg-col' }, el('div', { class: 'arg-label' }, '🛡 Dit modsvar'), editable('div', elx.rebuttal, (v) => patch(elx, 'rebuttal', v), 'arg-text')))));
+          el('div', { class: 'arg-col' }, el('div', { class: 'arg-label' }, 'Modpartens indsigelse'), editable('div', elx.objection, (v) => patch(elx, 'objection', v), 'arg-text')),
+          el('div', { class: 'arg-col' }, el('div', { class: 'arg-label' }, 'Dit modsvar'), editable('div', elx.rebuttal, (v) => patch(elx, 'rebuttal', v), 'arg-text')))));
     }
     card.append(el('button', { class: 'btn ghost sm add-el', onclick: () => { claim.elements.push(newElement()); save(); renderCase(); } }, icon('plus'), 'Tilføj beviskrav'));
     wrap.append(card);
@@ -842,7 +858,7 @@ function renderFrister(c) {
     el('div', { class: 'pv-bar' },
       el('button', { class: 'btn primary', onclick: () => { c.deadlines.unshift(newDeadline()); save(); renderCase(); } }, icon('plus'), 'Tilføj frist'),
       el('span', { class: 'muted sm' }, 'Rød = overskredet · orange = inden for 7 dage. (Visuelt — der sendes ingen besked.)')),
-    el('div', { class: 'tidform' }, el('span', { class: 'muted sm' }, '⏰ Beregn dansk frist:'), fd, ft,
+    el('div', { class: 'tidform' }, el('span', { class: 'muted sm' }, 'Beregn dansk frist:'), fd, ft,
       el('button', { class: 'btn', onclick: () => {
         const t = DK_FRISTER.find((x) => x.id === ft.value); if (!t) return;
         const date = computeDeadline(fd.value, t.days);
@@ -907,9 +923,9 @@ function renderSoeg(c) {
     const { added, total } = await reindexDocs(c, (d, t) => { reindexBtn.textContent = `Indekserer … ${d}/${t}`; });
     toast(total ? `Indekseret — ${added} dokumenter blev søgbare` : 'Ingen dokumenter at indeksere', added ? 'ok' : 'warn');
     renderCase();
-  } }, '📄 Gør dokumenter søgbare');
+  } }, icon('file'), 'Gør dokumenter søgbare');
   wrap.append(
-    el('div', { class: 'searchbar-row' }, el('span', { class: 'sicon' }, '🔎'), input),
+    el('div', { class: 'searchbar-row' }, el('span', { class: 'sicon' }, icon('search')), input),
     el('div', { class: 'scoperow' }, el('span', { class: 'muted sm' }, 'Søg kun i (vælg for at filtrere):'), chipsBar),
     el('div', { class: 'scoperow' }, reindexBtn, el('span', { class: 'muted sm' }, 'Kør én gang for at kunne søge INDE i PDF/Word-filer.')),
     results);
@@ -925,7 +941,7 @@ function renderSoeg(c) {
 // ---- Global søgning (hjem, på tværs af alle sager) ----
 function globalSearchBar() {
   const wrap = el('div', { class: 'globalsearch' });
-  const input = el('input', { class: 'searchbox', type: 'search', placeholder: '🔎 Søg på tværs af ALLE dine sager …' });
+  const input = el('input', { class: 'searchbox', type: 'search', placeholder: 'Søg på tværs af ALLE dine sager …' });
   const results = el('div', { class: 'searchresults global' });
   const docMap = {};
   for (const c of state.cases) for (const d of caseToDocs(c, {})) docMap[d.id] = d;
@@ -938,7 +954,7 @@ function globalSearchBar() {
   };
   const update = () => renderResults(results, runSearch(ms, Object.values(docMap), input.value, new Set()), docMap, input.value, jumpGlobal);
   input.addEventListener('input', update);
-  wrap.append(el('div', { class: 'searchbar-row big' }, el('span', { class: 'sicon' }, '🔎'), input), results);
+  wrap.append(el('div', { class: 'searchbar-row big' }, el('span', { class: 'sicon' }, icon('search')), input), results);
   return wrap;
 }
 
@@ -988,7 +1004,7 @@ function mailCaseModal(mail, cases, activeId) {
     const close = (val) => { back.remove(); resolve(val); };
     const back = el('div', { class: 'modal-back', onclick: (e) => { if (e.target === back) close(null); } },
       el('div', { class: 'modal' },
-        el('h3', {}, '📧 Tilføj mail til sag'),
+        el('h3', {}, 'Tilføj mail til sag'),
         el('div', { class: 'mc-mail' },
           el('div', { class: 'mc-subj' }, mail.subject || '(uden emne)'),
           el('div', { class: 'mc-meta muted' }, [mail.from, (mail.date ? daDate(mail.date) + (mail.time ? ' ' + mail.time : '') : '')].filter(Boolean).join(' · '))),
@@ -1001,7 +1017,7 @@ function mailCaseModal(mail, cases, activeId) {
   });
 }
 
-// kvittér tilbage til mail-fanen (popup'en) MED kø-id'et → bridge fjerner mailen fra køen (durabilitet) + viser "✅ Tilføjet til X".
+// kvittér tilbage til mail-fanen (popup'en) MED kø-id'et → bridge fjerner mailen fra køen (durabilitet) + viser "Tilføjet til X".
 function ackMail(qid, ok, titles) { try { window.postMessage({ type: 'caseboard-ack', nonce: MAIL_NONCE, qid: qid || null, ok: !!ok, titles: titles || [] }, location.origin); } catch (e) { /* ignore */ } }
 
 // modtag en mail (fra udvidelsen ELLER .eml-drop) → tilføj + synlig bekræftelse.
@@ -1043,7 +1059,7 @@ async function addFilesToCase(c, files, mail, mailEv) {
       } catch (e) { if (f.name) noted.push(f.name); }
     } else if (f && f.name) { noted.push(f.name); }   // ikke hentbar (Outlook/CORS/for stor) → notér navnet på mailen
   }
-  if (noted.length && mailEv) mailEv.body = (mailEv.body ? mailEv.body + '\n' : '') + '📎 Bilag (åbn mailen for at hente): ' + noted.join(', ');
+  if (noted.length && mailEv) mailEv.body = (mailEv.body ? mailEv.body + '\n' : '') + 'Bilag (åbn mailen for at hente): ' + noted.join(', ');
   return { added, noted: noted.length };
 }
 function receiveMail(mail, targets, qid, opts, files) { _mailQueue = _mailQueue.then(() => receiveMailNow(mail, targets, qid, opts, files)).catch((e) => { fail(e); ackMail(qid, false, []); }); return _mailQueue; }
@@ -1076,7 +1092,7 @@ async function receiveMailNow(mail, targets, qid, opts, files) {
   openCaseObj(lastCase);
   state.tab = 'tidslinje'; state.expanded = new Set([lastEv.id]); state.selEvent = lastEv.id; state.scrollTo = lastEv.id;
   renderCase();
-  successBanner('✅ Mail tilføjet til ' + names.map((n) => '«' + n + '»').join(', ') + (extras.size ? ' (+ ' + [...extras].join(', ') + ')' : ''));
+  successBanner('Mail tilføjet til ' + names.map((n) => '«' + n + '»').join(', ') + (extras.size ? ' (+ ' + [...extras].join(', ') + ')' : ''));
   ackMail(qid, true, names);
 }
 function setupMailReceiver() {
