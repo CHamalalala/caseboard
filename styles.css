@@ -337,3 +337,15 @@ body{font-family:system-ui,"Segoe UI",Roboto,-apple-system,"Helvetica Neue",Aria
 .chip.link{background:#eef3fa;border-color:#dce5f2}
 .chip.link:hover{background:#e3ebf7}
 .chip.link .x{color:#7c8aa3}
+
+/* ===== v7: SVG-ikoner (erstatter emojis → ens, skarpt, professionelt) ===== */
+.ic{display:inline-flex;align-items:center;justify-content:center;line-height:0;color:currentColor;flex:0 0 auto}
+.ic svg{display:block}
+/* knapper/faner: flex så ikon + tekst flugter pænt med fast mellemrum */
+.btn,.btn.sm,.mini-btn,.sectiontab,.casetab,.brand{display:inline-flex;align-items:center;gap:7px}
+.sectiontab{gap:8px}
+.brand{gap:9px;font-size:17px}
+.brand .ic{color:#d9b65c}                 /* guld vægt-emblem i topbaren */
+.ic-grip{color:#aab4c8}
+.casetab.homebtn .ic,.sectiontab .ic{opacity:.85}
+.sectiontab.active .ic{opacity:1;color:var(--blue)}

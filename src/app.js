@@ -7,6 +7,7 @@ import { el, toast, insertModal } from './ui.js';
 import { caseToDocs, buildIndex, runSearch, snippet, highlight, KINDS } from './search.js';
 import { buildShareZip, overviewHtml } from './export.js';
 import { drawConnectors, clearConnectors } from './connectors.js';
+import { icon } from './icons.js';
 import { extractText } from './extract.js';
 import { keyPoints, suggestHeading, SUMMARY_MODES } from './summarize.js';
 import { parseEml } from './eml.js';
@@ -24,14 +25,14 @@ const state = {
 };
 const resetView = () => { state.expanded = new Set(); state.selEvent = state.selSummary = null; state.tlFilter = { types: new Set(), tags: new Set() }; };
 const SECTIONS = [
-  { id: 'overblik', label: 'Overblik', icon: '📋' },
-  { id: 'tidslinje', label: 'Tidslinje', icon: '📅' },
-  { id: 'argumenter', label: 'Argumenter', icon: '⚖️' },
-  { id: 'dokumenter', label: 'Dokumenter', icon: '📎' },
-  { id: 'personer', label: 'Personer', icon: '👤' },
-  { id: 'frister', label: 'Frister', icon: '⏰' },
-  { id: 'tid', label: 'Tid', icon: '⏱' },
-  { id: 'soeg', label: 'Søg', icon: '🔎' },
+  { id: 'overblik', label: 'Overblik', iconName: 'overview' },
+  { id: 'tidslinje', label: 'Tidslinje', iconName: 'timeline' },
+  { id: 'argumenter', label: 'Argumenter', iconName: 'scale' },
+  { id: 'dokumenter', label: 'Dokumenter', iconName: 'paperclip' },
+  { id: 'personer', label: 'Personer', iconName: 'user' },
+  { id: 'frister', label: 'Frister', iconName: 'alarm' },
+  { id: 'tid', label: 'Tid', iconName: 'clock' },
+  { id: 'soeg', label: 'Søg', iconName: 'search' },
 ];
 let _urls = [];                              // aktive blob-URL'er (ryddes ved hver re-render)
 const blobUrl = (blob) => { const u = URL.createObjectURL(blob); _urls.push(u); return u; };
@@ -148,17 +149,17 @@ async function eventText(ev) {
 function renderAiSummary(box, ev, txt, mode) {
   const pts = keyPoints(txt, mode);
   box.replaceChildren(
-    el('div', { class: 'ai-label' }, '✨ Nøglepunkter — uddrag, ingen ny tekst'),
+    el('div', { class: 'ai-label' }, icon('sparkles', 13), ' Nøglepunkter — uddrag, ingen ny tekst'),
     el('div', { class: 'ai-len' }, el('span', { class: 'muted sm' }, 'Længde:'),
       ...SUMMARY_MODES.map((m) => el('span', { class: 'lenchip' + (m === mode ? ' on' : ''), onclick: () => renderAiSummary(box, ev, txt, m) }, m))),
     pts.length ? el('ul', { class: 'ai-points' }, ...pts.map((p) => el('li', {}, p))) : el('div', { class: 'ai-text muted' }, '(ingen tekst at opsummere — tilføj en note eller indeksér dokumentet)'),
-    pts.length ? el('div', { class: 'ai-apply' }, el('button', { class: 'btn sm', onclick: () => { ev.body = (ev.body ? ev.body + '\n\n' : '') + pts.map((p) => '• ' + p).join('\n'); save(); renderCase(); } }, '📋 Indsæt i note')) : null);
+    pts.length ? el('div', { class: 'ai-apply' }, el('button', { class: 'btn sm', onclick: () => { ev.body = (ev.body ? ev.body + '\n\n' : '') + pts.map((p) => '• ' + p).join('\n'); save(); renderCase(); } }, icon('clipboard'), 'Indsæt i note')) : null);
 }
 function renderAiHeading(box, ev, heading) {
   box.replaceChildren(
-    el('div', { class: 'ai-label' }, '✨ Foreslået overskrift — uddrag, ingen ny tekst'),
+    el('div', { class: 'ai-label' }, icon('sparkles', 13), ' Foreslået overskrift — uddrag, ingen ny tekst'),
     el('div', { class: 'ai-text' }, heading || '(ingen tekst endnu)'),
-    heading ? el('div', { class: 'ai-apply' }, el('button', { class: 'btn sm', onclick: () => { patch(ev, 'title', heading); renderCase(); } }, '🏷 Brug som overskrift')) : null);
+    heading ? el('div', { class: 'ai-apply' }, el('button', { class: 'btn sm', onclick: () => { patch(ev, 'title', heading); renderCase(); } }, icon('tag'), 'Brug som overskrift')) : null);
 }
 
 function patch(obj, key, val) { obj[key] = val; save(); }
@@ -300,7 +301,7 @@ function editable(tag, value, onsave, cls = '', lock = false) {
   return n;
 }
 // "Åbn sag" — vælg en sagsfil (ordet JSON nævnes ikke for brugeren).
-const openSagBtn = (label) => el('label', { class: 'btn ghost file' }, label,
+const openSagBtn = (label) => el('label', { class: 'btn ghost file' }, icon('folder'), label,
   el('input', { type: 'file', accept: '.json,.caseboard,application/json', style: 'display:none', onchange: (e) => e.target.files[0] && importCase(e.target.files[0]) }));
 
 // ---------- HJEM (Mine sager) ----------
@@ -312,15 +313,15 @@ function caseCard(c) {
     el('div', { class: 'cc-actions' },
       el('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); openCaseById(c.id); } }, 'Åbn'),
       el('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); exportCaseById(c.id); } }, '⤓'),
-      el('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); deleteCase(c.id); } }, '🗑')));
+      el('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); deleteCase(c.id); } }, icon('trash'))));
 }
 function renderHome() {
   revokeUrls();
   document.body.classList.remove('editing');     // GLM-review: editing-state må ikke hænge ved på hjem
   const header = el('header', { class: 'topbar' },
-    el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, '⚖️ CaseBoard'),
+    el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, icon('scale', 20), 'CaseBoard'),
     el('div', { class: 'casetitle' }, 'Mine sager'),
-    el('div', { class: 'tools' }, el('button', { class: 'btn ghost', onclick: refreshAll, title: 'Genindlæs (henter bl.a. mails tilføjet i baggrunden)' }, '🔄 Opdatér'), el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), openSagBtn('📂 Åbn sag')));
+    el('div', { class: 'tools' }, el('button', { class: 'btn ghost', onclick: refreshAll, title: 'Genindlæs (henter bl.a. mails tilføjet i baggrunden)' }, icon('refresh'), 'Opdatér'), el('button', { class: 'btn primary', onclick: createCase }, icon('plus'), 'Ny sag'), openSagBtn('Åbn sag')));
   const body = el('div', { class: 'home' });
   if (!state.cases.length) {
     body.append(el('div', { class: 'empty' },
@@ -328,9 +329,9 @@ function renderHome() {
       el('p', { class: 'big' }, 'Du har ingen sager endnu.'),
       el('p', {}, 'En sag samler hele forløbet ét sted: tidslinje, bilag og dine opsummeringer. Alt gemmes lokalt på din computer — intet sendes nogen steder.'),
       el('div', { class: 'tools center' },
-        el('button', { class: 'btn primary', onclick: createCase }, '➕ Opret ny sag'),
-        openSagBtn('📂 Åbn en sag'),
-        el('button', { class: 'btn', onclick: loadDemo }, '✨ Se et eksempel')),
+        el('button', { class: 'btn primary', onclick: createCase }, icon('plus'), 'Opret ny sag'),
+        openSagBtn('Åbn en sag'),
+        el('button', { class: 'btn', onclick: loadDemo }, icon('sparkles'), 'Se et eksempel')),
       el('div', { class: 'dropnote' }, '⤓ … eller træk en sagsfil — eller en mail (.eml) — ind her'),
       el('p', { class: 'hint muted' }, '“Åbn en sag” henter en sagsfil du har gemt eller fået tilsendt.')));
   } else {
@@ -416,7 +417,7 @@ function eventCard(ev) {
   const card = el('div', { class: cls, dataset: { id: ev.id } }, head);
   // tags: hvilke opsummeringer er begivenheden i
   const inSums = summariesForEvent(ev.id);
-  if (inSums.length) card.append(el('div', { class: 'fane-tags' }, ...inSums.map((s) => el('span', { class: 'tag', onclick: () => selectSummary(s.id) }, '🏷 ' + (s.title || '…')))));
+  if (inSums.length) card.append(el('div', { class: 'fane-tags' }, ...inSums.map((s) => el('span', { class: 'tag', onclick: () => selectSummary(s.id) }, icon('tag'), '' + (s.title || '…')))));
 
   if (open) {
     const body = el('div', { class: 'fane-body' });
@@ -429,19 +430,19 @@ function eventCard(ev) {
     if (att) {
       const pv = el('div', { class: 'preview' }); previewInto(pv, att); body.append(pv);
       body.append(el('div', { class: 'doc-actions' },
-        el('button', { class: 'btn sm', onclick: () => openOriginal(att) }, '🔍 Åbn original'),
-        el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(att) }, '⤓ Eksportér bilag'),
+        el('button', { class: 'btn sm', onclick: () => openOriginal(att) }, icon('search'), 'Åbn original'),
+        el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(att) }, icon('download'), 'Eksportér bilag'),
         el('span', { class: 'doc-name muted' }, att.name)));
       // 📌 citater (uddrag som bevis) — kan knyttes til et beviskrav i Argumenter
       const cits = (state.case.citations || []).filter((ct) => ct.eventId === ev.id);
-      const citBlock = el('div', { class: 'cit-block' }, el('div', { class: 'cit-h muted sm' }, '📌 Citater (uddrag som bevis):'),
+      const citBlock = el('div', { class: 'cit-block' }, el('div', { class: 'cit-h muted sm' }, icon('pin'), ' Citater (uddrag som bevis):'),
         ...cits.map((ct) => el('div', { class: 'citrow' }, el('span', { class: 'cit-q' }, '« ' + ct.quote + ' »'),
           ct.page ? el('span', { class: 'cit-pg' }, 's. ' + ct.page) : null,
           el('b', { class: 'x', title: 'Fjern', onclick: () => { state.case.citations = state.case.citations.filter((x) => x.id !== ct.id); save(); renderCase(); } }, ' ✕'))));
       const qIn = el('textarea', { class: 'cit-input', rows: '2', placeholder: 'Indsæt et uddrag fra dokumentet (markér i “Åbn original” → kopiér ind)' });
       const pIn = el('input', { class: 'cit-page', placeholder: 'side' });
       citBlock.append(el('div', { class: 'cit-add' }, qIn, pIn,
-        el('button', { class: 'btn sm', onclick: () => { const q = qIn.value.trim(); if (!q) return; state.case.citations = state.case.citations || []; state.case.citations.push(newCitation({ eventId: ev.id, fileId: att.fileId, page: pIn.value.trim(), quote: q })); save(); renderCase(); } }, '📌 Pin citat')));
+        el('button', { class: 'btn sm', onclick: () => { const q = qIn.value.trim(); if (!q) return; state.case.citations = state.case.citations || []; state.case.citations.push(newCitation({ eventId: ev.id, fileId: att.fileId, page: pIn.value.trim(), quote: q })); save(); renderCase(); } }, icon('pin'), 'Pin citat')));
       body.append(citBlock);
     }
     if (ev.parties) body.append(el('div', { class: 'parties' }, ev.parties));
@@ -449,22 +450,22 @@ function eventCard(ev) {
       editable('div', ev.body, (v) => patch(ev, 'body', v), 'body', true));
     // etiketter
     ev.tags = ev.tags || [];
-    body.append(el('div', { class: 'tagsrow' }, el('span', { class: 'muted sm' }, '🏷'),
+    body.append(el('div', { class: 'tagsrow' }, el('span', { class: 'muted sm' }, icon('tag')),
       ...ev.tags.map((t) => el('span', { class: 'etag' }, t, el('b', { class: 'x', onclick: () => { ev.tags = ev.tags.filter((x) => x !== t); save(); renderCase(); } }, ' ✕'))),
       el('input', { class: 'taginput', placeholder: '+ etiket', onkeydown: (e) => { if (e.key === 'Enter') { const v = e.target.value.trim(); if (v && !ev.tags.includes(v)) { ev.tags.push(v); save(); renderCase(); } } } })));
     // personer (kun hvis sagen har nogen)
     const ppl = state.case.people || [];
     if (ppl.length) {
       ev.people = ev.people || [];
-      body.append(el('div', { class: 'tagsrow' }, el('span', { class: 'muted sm' }, '👤'),
+      body.append(el('div', { class: 'tagsrow' }, el('span', { class: 'muted sm ic-inline' }, icon('user', 14)),
         ...ppl.map((p) => el('span', { class: 'ptag' + (ev.people.includes(p.id) ? ' on' : ''),
           onclick: () => { ev.people = ev.people.includes(p.id) ? ev.people.filter((x) => x !== p.id) : [...ev.people, p.id]; save(); renderCase(); } }, p.name))));
     }
     // ✨ ekstraktiv AI (offline, deterministisk, ingen hallucination)
     const aiBox = el('div', { class: 'aibox' });
     body.append(el('div', { class: 'ai-actions' },
-      el('button', { class: 'btn ghost sm', onclick: async () => { aiBox.replaceChildren(el('span', { class: 'muted sm' }, 'Læser tekst …')); renderAiSummary(aiBox, ev, await eventText(ev), 'normal'); } }, '✨ Opsummér (nøglepunkter)'),
-      el('button', { class: 'btn ghost sm', onclick: async () => { renderAiHeading(aiBox, ev, suggestHeading(await eventText(ev))); } }, '✨ Foreslå overskrift')),
+      el('button', { class: 'btn ghost sm', onclick: async () => { aiBox.replaceChildren(el('span', { class: 'muted sm' }, 'Læser tekst …')); renderAiSummary(aiBox, ev, await eventText(ev), 'normal'); } }, icon('sparkles'), 'Opsummér (nøglepunkter)'),
+      el('button', { class: 'btn ghost sm', onclick: async () => { renderAiHeading(aiBox, ev, suggestHeading(await eventText(ev))); } }, icon('sparkles'), 'Foreslå overskrift')),
       aiBox);
     card.append(body);
   }
@@ -486,13 +487,13 @@ function summaryCard(su, i = 0) {
   // hover fremkalder denne opsummerings tråde (også når en anden er fast-valgt → preview nabo); hover har forrang
   card.addEventListener('mouseenter', () => { state._hoverSummary = su.id; redrawThreads(); });
   card.addEventListener('mouseleave', () => { if (state._hoverSummary !== su.id) return; state._hoverSummary = null; redrawThreads(); });  // ryd ALTID (ellers ghost-hover ved klik, GLM-review)
-  const grip = el('span', { class: 'grip', title: 'Træk for at flytte' }, '⠿');
+  const grip = el('span', { class: 'grip', title: 'Træk for at flytte' }, icon('grip', 18));
   card.append(
     el('div', { class: 'su-head', onclick: () => selectSummary(su.id) },
       grip,
       el('span', { class: 'colorswatch', title: 'Skift farve', style: `background:${su.color}`, onclick: (e) => { e.stopPropagation(); su.color = SUMMARY_COLORS[(SUMMARY_COLORS.indexOf(su.color) + 1) % SUMMARY_COLORS.length]; save(); renderCase(); } }),
       editable('span', su.title, (v) => patch(su, 'title', v), 'title'),
-      el('span', { class: 'x del', title: 'Slet', onclick: (e) => { e.stopPropagation(); state.case.summaries = state.case.summaries.filter((x) => x.id !== su.id); save(); renderCase(); } }, '🗑')),
+      el('span', { class: 'x del', title: 'Slet', onclick: (e) => { e.stopPropagation(); state.case.summaries = state.case.summaries.filter((x) => x.id !== su.id); save(); renderCase(); } }, icon('trash'))),
     editable('div', su.body, (v) => patch(su, 'body', v), 'body'));
   // (anker-funktionen fjernet: et dato-badge der intet gjorde — link-chips nedenfor er den rigtige kobling til begivenheder)
   card.append(el('div', { class: 'links' }, ...su.links.map((l) =>
@@ -536,7 +537,7 @@ function summaryCard(su, i = 0) {
 
 function casetabsStrip() {
   return el('div', { class: 'casetabs' },
-    el('div', { class: 'casetab homebtn' + (state.view === 'home' ? ' active' : ''), title: 'Mine sager', onclick: navHome }, '🏠 Hjem'),
+    el('div', { class: 'casetab homebtn' + (state.view === 'home' ? ' active' : ''), title: 'Mine sager', onclick: navHome }, icon('home'), 'Hjem'),
     ...state.openOrder.map((id) => {
       const co = state.openCaseObjs[id]; const active = state.view === 'case' && id === state.activeCaseId;
       return el('div', { class: 'casetab' + (active ? ' active' : ''), onclick: () => switchCase(id), title: 'Skift til ' + (co?.title || 'sag') },
@@ -551,24 +552,24 @@ function renderCase() {
   const c = state.case;
   document.body.classList.toggle('editing', !!state.editMode);
   const topbar = el('header', { class: 'topbar' },
-    el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, '⚖️ CaseBoard'),
-    el('div', { class: 'tools' }, el('button', { class: 'btn ghost', onclick: refreshAll, title: 'Genindlæs (henter bl.a. mails tilføjet i baggrunden)' }, '🔄 Opdatér'), el('button', { class: 'btn primary', onclick: createCase }, '➕ Ny sag'), openSagBtn('📂 Åbn sag')));
+    el('div', { class: 'brand', onclick: navHome, title: 'Hjem' }, icon('scale', 20), 'CaseBoard'),
+    el('div', { class: 'tools' }, el('button', { class: 'btn ghost', onclick: refreshAll, title: 'Genindlæs (henter bl.a. mails tilføjet i baggrunden)' }, icon('refresh'), 'Opdatér'), el('button', { class: 'btn primary', onclick: createCase }, icon('plus'), 'Ny sag'), openSagBtn('Åbn sag')));
 
   const casehead = el('div', { class: 'casehead' },
     editable('div', c.title, (v) => patch(c, 'title', v), 'headtitle', true),
     el('div', { class: 'tools' },
-      el('button', { class: 'btn ' + (state.editMode ? 'editon' : 'ghost'), role: 'switch', 'aria-pressed': state.editMode ? 'true' : 'false', 'aria-label': 'Redigeringstilstand', onclick: () => { state.editMode = !state.editMode; renderCase(); }, title: state.editMode ? 'Lås teksten (read-only)' : 'Lås op for at redigere tekst' }, state.editMode ? '🔓 Redigerer' : '✏️ Redigér'),
-      el('button', { class: 'btn primary', onclick: addEventFromModal }, '➕ Indsæt bilag'),
-      el('button', { class: 'btn', onclick: () => { state.tab = 'tidslinje'; addSummary(); } }, '＋ Opsummering'),
-      el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil (til backup / gen-import)' }, '💾 Gem sag'),
-      el('button', { class: 'btn ghost', onclick: () => exportEncrypted(c), title: 'Eksportér sagen KRYPTERET med en adgangskode (til fortrolig deling)' }, '🔒'),
-      el('button', { class: 'btn ghost', onclick: () => exportShare(c), title: 'Pak sagen som en mappe (Bilag + læsbar oversigt) — nem at dele med en kollega' }, '📦 Del'),
-      el('button', { class: 'btn ghost', onclick: () => printChronology(c), title: 'Print en ren kronologi (til retten/møder) — vælg "Gem som PDF"' }, '🖨 Print')));
+      el('button', { class: 'btn ' + (state.editMode ? 'editon' : 'ghost'), role: 'switch', 'aria-pressed': state.editMode ? 'true' : 'false', 'aria-label': 'Redigeringstilstand', onclick: () => { state.editMode = !state.editMode; renderCase(); }, title: state.editMode ? 'Lås teksten (read-only)' : 'Lås op for at redigere tekst' }, state.editMode ? [icon('unlock'), 'Redigerer'] : [icon('pencil'), 'Redigér']),
+      el('button', { class: 'btn primary', onclick: addEventFromModal }, icon('plus'), 'Indsæt bilag'),
+      el('button', { class: 'btn', onclick: () => { state.tab = 'tidslinje'; addSummary(); } }, icon('plus'), 'Opsummering'),
+      el('button', { class: 'btn ghost', onclick: () => exportCaseObj(c), title: 'Gem hele sagen som én fil (til backup / gen-import)' }, icon('download'), 'Gem sag'),
+      el('button', { class: 'btn ghost', onclick: () => exportEncrypted(c), title: 'Eksportér sagen KRYPTERET med en adgangskode (til fortrolig deling)', 'aria-label': 'Krypteret eksport' }, icon('lock')),
+      el('button', { class: 'btn ghost', onclick: () => exportShare(c), title: 'Pak sagen som en mappe (Bilag + læsbar oversigt) — nem at dele med en kollega' }, icon('share'), 'Del'),
+      el('button', { class: 'btn ghost', onclick: () => printChronology(c), title: 'Print en ren kronologi (til retten/møder) — vælg "Gem som PDF"' }, icon('printer'), 'Print')));
 
   const counts = { tidslinje: c.events.length, argumenter: (c.claims || []).length, dokumenter: caseFileIds(c).length, personer: (c.people || []).length, frister: (c.deadlines || []).length, tid: (c.timeEntries || []).length };
   const sectiontabs = el('div', { class: 'sectiontabs' }, ...SECTIONS.map((s) =>
     el('div', { class: 'sectiontab' + (state.tab === s.id ? ' active' : ''), onclick: () => setTab(s.id) },
-      s.icon + ' ' + s.label, counts[s.id] ? el('span', { class: 'badge' }, String(counts[s.id])) : null)));
+      icon(s.iconName), s.label, counts[s.id] ? el('span', { class: 'badge' }, String(counts[s.id])) : null)));
 
   const view = state.tab === 'tidslinje' ? renderTidslinje(c)
     : state.tab === 'argumenter' ? renderArgumenter(c)
@@ -623,7 +624,7 @@ function renderTidslinje(c) {
     el('span', { class: 'muted sm' }, 'Filtrér:'),
     ...TYPES.map((t) => fchip(f.types, t, t)),
     allTags.length ? el('span', { class: 'fsep' }, '|') : null,
-    ...allTags.map((t) => fchip(f.tags, t, '🏷 ' + t)),
+    ...allTags.map((t) => fchip(f.tags, t, icon('tag'), '' + t)),
     (f.types.size || f.tags.size) ? el('span', { class: 'fclear', onclick: () => { f.types.clear(); f.tags.clear(); renderCase(); } }, '✕ Ryd') : null) : null;
   const timeline = el('main', { class: 'timeline' },
     el('div', { class: 'tl-head' }, el('h2', {}, 'Tidslinje' + (evs.length !== all.length ? ` (${evs.length}/${all.length})` : '')),
@@ -637,7 +638,7 @@ function renderTidslinje(c) {
   const maxX = sums.reduce((m, s) => Math.max(m, s.x || 0), 0);
   const canvas = el('div', { class: 'canvas', style: `min-height:${Math.max(440, maxY + 260)}px;min-width:${Math.max(300, maxX + 330)}px` },
     el('div', { class: 'canvas-hint' }, '🎨 Frit lærred — træk opsummeringerne rundt; hver har sin egen farve på trådene.',
-      sums.length > 1 ? el('button', { class: 'mini-btn', style: 'margin-left:10px', onclick: arrangeSummaries, title: 'Stil opsummeringerne pænt op uden overlap' }, '🧹 Arranger') : null),
+      sums.length > 1 ? el('button', { class: 'mini-btn', style: 'margin-left:10px', onclick: arrangeSummaries, title: 'Stil opsummeringerne pænt op uden overlap' }, icon('arrange'), 'Arranger') : null),
     ...(sums.length ? sums.map((s, i) => summaryCard(s, i)) : [el('p', { class: 'muted canvas-empty' }, 'Ingen opsummeringer endnu — tryk “＋ Opsummering” i toppen.')]));
   return el('div', { class: 'layout' }, timeline, canvas);
 }
@@ -682,8 +683,8 @@ function renderDokumenter(c) {
       el('span', { class: 'ficon' }, kindIcon(fileKind(a.mime, a.name))),
       el('span', { class: 'docrow-name ovlink', title: 'Gå til på tidslinjen', onclick: () => { state.tab = 'tidslinje'; state.expanded.add(ev.id); state.selEvent = ev.id; state.selSummary = null; state.scrollTo = ev.id; renderCase(); } }, a.name),
       el('span', { class: 'docrow-date muted' }, daDate(ev.date)),
-      el('button', { class: 'btn sm', onclick: () => openOriginal(a) }, '🔍 Åbn'),
-      el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(a) }, '⤓ Eksportér'))));
+      el('button', { class: 'btn sm', onclick: () => openOriginal(a) }, icon('search'), 'Åbn'),
+      el('button', { class: 'btn ghost sm', onclick: () => exportOriginal(a) }, icon('download'), 'Eksportér'))));
 }
 
 // ---- Sektion: Tid (timeregnskab) ----
@@ -713,14 +714,14 @@ function renderTid(c) {
       const mins = (Number(hIn.value) || 0) * 60 + (Number(mIn.value) || 0);
       if (mins <= 0) return toast('Angiv en varighed', 'warn');
       c.timeEntries.unshift(newTimeEntry({ date: dIn.value, minutes: mins, note: nIn.value })); save(); renderCase();
-    } }, '➕ Tilføj')));
+    } }, icon('plus'), 'Tilføj')));
   if (!c.timeEntries.length) { wrap.append(el('p', { class: 'muted' }, 'Ingen tidsregistreringer endnu. Brug timeren eller tilføj manuelt.')); return wrap; }
   for (const t of [...c.timeEntries].sort((a, b) => a.date < b.date ? 1 : -1)) {
     wrap.append(el('div', { class: 'tidrow' },
       el('span', { class: 'd' }, daDate(t.date)),
       el('span', { class: 'tmin' }, fmtMinutes(t.minutes)),
       el('span', { class: 'tnt' }, t.note || ''),
-      el('span', { class: 'x del', title: 'Slet', onclick: () => { c.timeEntries = c.timeEntries.filter((x) => x.id !== t.id); save(); renderCase(); } }, '🗑')));
+      el('span', { class: 'x del', title: 'Slet', onclick: () => { c.timeEntries = c.timeEntries.filter((x) => x.id !== t.id); save(); renderCase(); } }, icon('trash'))));
   }
   return wrap;
 }
@@ -771,7 +772,7 @@ function renderArgumenter(c) {
   c.claims = c.claims || [];
   const wrap = el('div', { class: 'argview' },
     el('div', { class: 'pv-bar' },
-      el('button', { class: 'btn primary', onclick: () => { c.claims.push(newClaim('Ny påstand', c.claims.length)); save(); renderCase(); } }, '➕ Ny påstand'),
+      el('button', { class: 'btn primary', onclick: () => { c.claims.push(newClaim('Ny påstand', c.claims.length)); save(); renderCase(); } }, icon('plus'), 'Ny påstand'),
       el('span', { class: 'muted sm' }, 'Påstand → bryd i beviskrav → knyt bevis. Røde felter = beviskrav UDEN bevis (hullerne).')));
   if (!c.claims.length) { wrap.append(el('p', { class: 'muted' }, 'Ingen påstande endnu. En påstand er det du vil have retten til at lægge til grund (fx “Sælger skal frigøres for realkreditlånet”). Bryd den i de beviskrav der skal være opfyldt.')); return wrap; }
   for (const claim of c.claims) {
@@ -779,12 +780,12 @@ function renderArgumenter(c) {
       el('div', { class: 'claim-head' },
         editable('div', claim.title, (v) => patch(claim, 'title', v), 'claim-title'),
         strengthBar(claimStrength(claim, c.events, c.citations)),
-        el('span', { class: 'x del', title: 'Slet påstand', onclick: () => { c.claims = c.claims.filter((x) => x.id !== claim.id); save(); renderCase(); } }, '🗑')));
+        el('span', { class: 'x del', title: 'Slet påstand', onclick: () => { c.claims = c.claims.filter((x) => x.id !== claim.id); save(); renderCase(); } }, icon('trash'))));
     for (const elx of claim.elements) {
       const status = elementStatus(elx);   // 'ok' | 'hul' | 'modpart'
       const essChk = (e) => { patch(elx, 'essential', e.target.checked); renderCase(); };
       card.append(el('div', { class: 'element st-' + status },
-        el('span', { class: 'x del el-del', title: 'Slet beviskrav', onclick: () => { claim.elements = claim.elements.filter((x) => x.id !== elx.id); save(); renderCase(); } }, '🗑'),
+        el('span', { class: 'x del el-del', title: 'Slet beviskrav', onclick: () => { claim.elements = claim.elements.filter((x) => x.id !== elx.id); save(); renderCase(); } }, icon('trash')),
         el('div', { class: 'el-main' },
           editable('div', elx.text, (v) => patch(elx, 'text', v), 'el-text'),
           el('div', { class: 'el-meta' },
@@ -800,7 +801,7 @@ function renderArgumenter(c) {
           el('div', { class: 'arg-col' }, el('div', { class: 'arg-label' }, '⚔ Modpartens indsigelse'), editable('div', elx.objection, (v) => patch(elx, 'objection', v), 'arg-text')),
           el('div', { class: 'arg-col' }, el('div', { class: 'arg-label' }, '🛡 Dit modsvar'), editable('div', elx.rebuttal, (v) => patch(elx, 'rebuttal', v), 'arg-text')))));
     }
-    card.append(el('button', { class: 'btn ghost sm add-el', onclick: () => { claim.elements.push(newElement()); save(); renderCase(); } }, '➕ Tilføj beviskrav'));
+    card.append(el('button', { class: 'btn ghost sm add-el', onclick: () => { claim.elements.push(newElement()); save(); renderCase(); } }, icon('plus'), 'Tilføj beviskrav'));
     wrap.append(card);
   }
   return wrap;
@@ -814,7 +815,7 @@ function roleSelect(p) {
 function renderPersoner(c) {
   c.people = c.people || [];
   const wrap = el('div', { class: 'peopleview' },
-    el('div', { class: 'pv-bar' }, el('button', { class: 'btn primary', onclick: () => { c.people.unshift(newPerson()); save(); renderCase(); } }, '➕ Tilføj person')));
+    el('div', { class: 'pv-bar' }, el('button', { class: 'btn primary', onclick: () => { c.people.unshift(newPerson()); save(); renderCase(); } }, icon('plus'), 'Tilføj person')));
   if (!c.people.length) { wrap.append(el('p', { class: 'muted' }, 'Ingen personer endnu. Tilføj parter, vidner og advokater — og knyt begivenheder til dem fra tidslinjen.')); return wrap; }
   for (const p of c.people) {
     const evs = sortEvents((c.events || []).filter((e) => (e.people || []).includes(p.id)));
@@ -822,7 +823,7 @@ function renderPersoner(c) {
       el('div', { class: 'pc-head' },
         editable('div', p.name, (v) => patch(p, 'name', v), 'pc-name'),
         roleSelect(p),
-        el('span', { class: 'x del', title: 'Slet', onclick: () => { c.people = c.people.filter((x) => x.id !== p.id); save(); renderCase(); } }, '🗑')),
+        el('span', { class: 'x del', title: 'Slet', onclick: () => { c.people = c.people.filter((x) => x.id !== p.id); save(); renderCase(); } }, icon('trash'))),
       editable('div', p.note, (v) => patch(p, 'note', v), 'pc-note'),
       el('div', { class: 'pc-events' },
         el('div', { class: 'muted sm' }, evs.length ? 'Vidne-fil — begivenheder med denne person:' : 'Ingen begivenheder knyttet endnu (knyt via en begivenhed på tidslinjen).'),
@@ -839,7 +840,7 @@ function renderFrister(c) {
   const ft = el('select', { class: 'roleselect' }, ...DK_FRISTER.map((x) => el('option', { value: x.id }, x.label + ' (' + x.days + ' dage)')));
   const wrap = el('div', { class: 'fristview' },
     el('div', { class: 'pv-bar' },
-      el('button', { class: 'btn primary', onclick: () => { c.deadlines.unshift(newDeadline()); save(); renderCase(); } }, '➕ Tilføj frist'),
+      el('button', { class: 'btn primary', onclick: () => { c.deadlines.unshift(newDeadline()); save(); renderCase(); } }, icon('plus'), 'Tilføj frist'),
       el('span', { class: 'muted sm' }, 'Rød = overskredet · orange = inden for 7 dage. (Visuelt — der sendes ingen besked.)')),
     el('div', { class: 'tidform' }, el('span', { class: 'muted sm' }, '⏰ Beregn dansk frist:'), fd, ft,
       el('button', { class: 'btn', onclick: () => {
@@ -847,7 +848,7 @@ function renderFrister(c) {
         const date = computeDeadline(fd.value, t.days);
         c.deadlines.unshift(newDeadline({ date, title: t.label })); save(); renderCase();
         toast('Frist beregnet: ' + daDate(date), 'ok');
-      } }, '➕ Beregn & tilføj'),
+      } }, icon('plus'), 'Beregn & tilføj'),
       el('span', { class: 'muted sm' }, 'Vejledende — verificér altid (helligdage ej medregnet).')));
   if (!c.deadlines.length) { wrap.append(el('p', { class: 'muted' }, 'Ingen frister endnu.')); return wrap; }
   for (const d of [...c.deadlines].sort((a, b) => a.date < b.date ? -1 : 1)) {
@@ -857,7 +858,7 @@ function renderFrister(c) {
       el('input', { type: 'date', value: d.date, class: 'fdate', onchange: (e) => { patch(d, 'date', e.target.value); renderCase(); } }),
       editable('div', d.title, (v) => patch(d, 'title', v), 'ftitle'),
       el('span', { class: 'fstatus' }, d.done ? '✓ Klaret' : st === 'overdue' ? 'Overskredet' : st === 'soon' ? 'Snart' : ''),
-      el('span', { class: 'x del', title: 'Slet', onclick: () => { c.deadlines = c.deadlines.filter((x) => x.id !== d.id); save(); renderCase(); } }, '🗑')));
+      el('span', { class: 'x del', title: 'Slet', onclick: () => { c.deadlines = c.deadlines.filter((x) => x.id !== d.id); save(); renderCase(); } }, icon('trash'))));
   }
   return wrap;
 }
@@ -983,7 +984,7 @@ function mailCaseModal(mail, cases, activeId) {
       return row;
     };
     for (const c of cases) list.append(opt(c.id, c.title || '(uden titel)', `${(c.events || []).length} begivenheder`));
-    list.append(opt('new', '➕ Ny sag fra mailen', 'opretter en ny sag på mailens emne'));
+    list.append(opt('new', icon('plus'), 'Ny sag fra mailen', 'opretter en ny sag på mailens emne'));
     const close = (val) => { back.remove(); resolve(val); };
     const back = el('div', { class: 'modal-back', onclick: (e) => { if (e.target === back) close(null); } },
       el('div', { class: 'modal' },
@@ -995,7 +996,7 @@ function mailCaseModal(mail, cases, activeId) {
         list,
         el('div', { class: 'modal-row' },
           el('button', { class: 'btn ghost', onclick: () => close(null) }, 'Annullér'),
-          el('button', { class: 'btn primary', onclick: () => close(chosen) }, '➕ Tilføj til sag'))));
+          el('button', { class: 'btn primary', onclick: () => close(chosen) }, icon('plus'), 'Tilføj til sag'))));
     document.body.append(back);
   });
 }

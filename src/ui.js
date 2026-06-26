@@ -31,7 +31,7 @@ export function insertModal({ TYPES, today }) {
     const close = (val) => { back.remove(); resolve(val); };
     const back = el('div', { class: 'modal-back', onclick: (e) => { if (e.target === back) close(null); } },
       el('div', { class: 'modal' },
-        el('h3', {}, '➕ Indsæt nyt bevis / begivenhed'),
+        el('h3', {}, 'Indsæt nyt bevis / begivenhed'),
         el('label', {}, 'Dato', date),
         el('label', {}, 'Titel', title),
         el('label', {}, 'Type', type),
