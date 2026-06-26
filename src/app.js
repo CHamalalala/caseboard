@@ -173,6 +173,19 @@ function cleanupRefs(evId) {
   if (deadCits.length) for (const cl of c.claims || []) for (const elx of cl.elements || []) elx.evidence = (elx.evidence || []).filter((x) => !deadCits.includes(x));
 }
 function addSummary() { const s = newSummary('Ny opsummering', state.case.summaries.length); state.case.summaries.unshift(s); save(); renderCase(); return s; }
+// 🧹 auto-fliser opsummeringerne i 2 kolonner UDEN overlap (måler de aktuelt renderede korthøjder → masonry)
+function arrangeSummaries() {
+  const sums = state.case.summaries || [];
+  const colX = [16, 360], colY = [16, 16], gap = 18;
+  for (const su of sums) {
+    const card = document.querySelector(`.canvas .card.summary[data-sid="${su.id}"]`);
+    const h = card ? card.offsetHeight : 200;
+    const col = colY[0] <= colY[1] ? 0 : 1;     // korteste kolonne
+    su.x = colX[col]; su.y = colY[col];
+    colY[col] += h + gap;
+  }
+  save(); renderCase();
+}
 function linkEventToSummary(summaryId, ev) {
   const s = state.case.summaries.find((x) => x.id === summaryId); if (!s) return;
   if (s.links.some((l) => l.refId === ev.id)) { s.links = s.links.filter((l) => l.refId !== ev.id); }  // toggle
@@ -596,7 +609,8 @@ function renderTidslinje(c) {
   const maxY = sums.reduce((m, s) => Math.max(m, s.y || 0), 0);
   const maxX = sums.reduce((m, s) => Math.max(m, s.x || 0), 0);
   const canvas = el('div', { class: 'canvas', style: `min-height:${Math.max(440, maxY + 260)}px;min-width:${Math.max(300, maxX + 330)}px` },
-    el('div', { class: 'canvas-hint' }, '🎨 Frit lærred — træk opsummeringerne rundt; hver har sin egen farve på trådene til begivenhederne.'),
+    el('div', { class: 'canvas-hint' }, '🎨 Frit lærred — træk opsummeringerne rundt; hver har sin egen farve på trådene.',
+      sums.length > 1 ? el('button', { class: 'mini-btn', style: 'margin-left:10px', onclick: arrangeSummaries, title: 'Stil opsummeringerne pænt op uden overlap' }, '🧹 Arranger') : null),
     ...(sums.length ? sums.map((s, i) => summaryCard(s, i)) : [el('p', { class: 'muted canvas-empty' }, 'Ingen opsummeringer endnu — tryk “＋ Opsummering” i toppen.')]));
   return el('div', { class: 'layout' }, timeline, canvas);
 }
