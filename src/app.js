@@ -569,8 +569,14 @@ function renderCase() {
       const id = state.scrollTo; state.scrollTo = null;
       setTimeout(() => {
         const card = root().querySelector('.card.ev[data-id="' + CSS.escape(id) + '"]');
-        if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 1700); }
-      }, 60);
+        if (card) {
+          // smooth hvis bevægelse er OK, ellers instant (smooth bliver suppresset ved reduceret-bevægelse → ellers scroller den slet ikke)
+          const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+          card.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
+          if (smooth) setTimeout(() => { const rt = card.getBoundingClientRect().top; if (rt < 0 || rt > innerHeight) card.scrollIntoView({ behavior: 'auto', block: 'center' }); }, 500);  // fallback: ramte ikke → instant
+          card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 1800);
+        }
+      }, 90);
     }
   } else clearConnectors();
 }
