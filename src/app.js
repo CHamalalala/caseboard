@@ -497,7 +497,7 @@ function summaryCard(su, i = 0) {
   else if (state.selEvent) { const e = state.case.events.find((x) => x.id === state.selEvent); if (e) anchorRow.append(el('button', { class: 'btn ghost sm', onclick: () => { su.anchorDate = e.date; save(); renderCase(); } }, '📌 Anker til ' + daDate(e.date))); }
   card.append(anchorRow);
   card.append(el('div', { class: 'links' }, ...su.links.map((l) =>
-    el('span', { class: 'chip link', onclick: () => selectEvent(l.refId) }, l.label,
+    el('span', { class: 'chip link', title: 'Gå til begivenheden på tidslinjen', onclick: () => gotoEvent(l.refId, su.id) }, l.label,
       el('b', { class: 'x', onclick: (e) => { e.stopPropagation(); su.links = su.links.filter((y) => y.refId !== l.refId); save(); renderCase(); } }, ' ✕')))));
   // frit træk på lærredet (via grebet)
   grip.addEventListener('pointerdown', (e) => {
@@ -732,7 +732,14 @@ function strengthBar(st) {
     el('div', { class: 'sb-track' }, el('div', { class: 'sb-fill str-' + st.label, style: `width:${Math.round(st.score * 100)}%` })),
     el('span', { class: 'sb-label str-' + st.label }, st.label + (st.gaps ? ` · ${st.gaps} hul` : '')));
 }
-function gotoEvent(refId) { state.tab = 'tidslinje'; state.expanded.add(refId); state.selEvent = refId; state.selSummary = null; state.scrollTo = refId; renderCase(); }
+// hop til en begivenhed på tidslinjen: skift fane, fold ud, scroll + flash. fromSummaryId bevarer opsummeringens tråd.
+function gotoEvent(refId, fromSummaryId = null) {
+  const ev = (state.case.events || []).find((e) => e.id === refId);
+  const f = state.tlFilter;
+  // ryd KUN filteret hvis det reelt ville skjule mål-begivenheden (ellers er kortet ikke i DOM'en → scrollet fejler lydløst)
+  if (ev && f && ((f.types.size && !f.types.has(ev.type)) || (f.tags.size && !(ev.tags || []).some((t) => f.tags.has(t))))) { f.types.clear(); f.tags.clear(); }
+  state.tab = 'tidslinje'; state.expanded.add(refId); state.selEvent = refId; state.selSummary = fromSummaryId; state.scrollTo = refId; renderCase();
+}
 function renderArgumenter(c) {
   c.claims = c.claims || [];
   const wrap = el('div', { class: 'argview' },
@@ -792,7 +799,7 @@ function renderPersoner(c) {
       editable('div', p.note, (v) => patch(p, 'note', v), 'pc-note'),
       el('div', { class: 'pc-events' },
         el('div', { class: 'muted sm' }, evs.length ? 'Vidne-fil — begivenheder med denne person:' : 'Ingen begivenheder knyttet endnu (knyt via en begivenhed på tidslinjen).'),
-        ...evs.map((e) => el('div', { class: 'pc-ev', onclick: () => { state.tab = 'tidslinje'; state.expanded.add(e.id); state.selEvent = e.id; renderCase(); } },
+        ...evs.map((e) => el('div', { class: 'pc-ev', onclick: () => gotoEvent(e.id) },
           el('span', { class: 'd' }, daDate(e.date)), ' ' + e.title)))));
   }
   return wrap;
