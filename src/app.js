@@ -491,11 +491,7 @@ function summaryCard(su, i = 0) {
       editable('span', su.title, (v) => patch(su, 'title', v), 'title'),
       el('span', { class: 'x del', title: 'Slet', onclick: (e) => { e.stopPropagation(); state.case.summaries = state.case.summaries.filter((x) => x.id !== su.id); save(); renderCase(); } }, '🗑')),
     editable('div', su.body, (v) => patch(su, 'body', v), 'body'));
-  // anker til markeret begivenheds dato
-  const anchorRow = el('div', { class: 'anchor-row' });
-  if (su.anchorDate) anchorRow.append(el('span', { class: 'anchor' }, '📌 ' + daDate(su.anchorDate), el('b', { class: 'x', onclick: () => { su.anchorDate = null; save(); renderCase(); } }, ' ✕')));
-  else if (state.selEvent) { const e = state.case.events.find((x) => x.id === state.selEvent); if (e) anchorRow.append(el('button', { class: 'btn ghost sm', onclick: () => { su.anchorDate = e.date; save(); renderCase(); } }, '📌 Anker til ' + daDate(e.date))); }
-  card.append(anchorRow);
+  // (anker-funktionen fjernet: et dato-badge der intet gjorde — link-chips nedenfor er den rigtige kobling til begivenheder)
   card.append(el('div', { class: 'links' }, ...su.links.map((l) =>
     el('span', { class: 'chip link', title: 'Gå til begivenheden på tidslinjen', onclick: () => gotoEvent(l.refId, su.id) }, l.label,
       el('b', { class: 'x', onclick: (e) => { e.stopPropagation(); su.links = su.links.filter((y) => y.refId !== l.refId); save(); renderCase(); } }, ' ✕')))));
