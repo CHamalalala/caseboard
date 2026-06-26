@@ -499,13 +499,34 @@ function summaryCard(su, i = 0) {
   grip.addEventListener('pointerdown', (e) => {
     e.preventDefault(); card.setPointerCapture?.(e.pointerId);
     const sx = e.clientX, sy = e.clientY, ox = su.x, oy = su.y;
+    const sScrollX = window.scrollX, sScrollY = window.scrollY;  // scroll-position ved trækstart
+    let cx = e.clientX, cy = e.clientY;                          // seneste markør-position (viewport)
     card.classList.add('dragging');
-    const move = (ev) => { su.x = Math.max(0, ox + ev.clientX - sx); su.y = Math.max(0, oy + ev.clientY - sy); card.style.left = su.x + 'px'; card.style.top = su.y + 'px'; redrawThreadsRaf(); };
+    // dokument-delta = muse-bevægelse PLUS hvor langt siden er scrollet → kortet følger musen uanset scroll
+    const apply = () => {
+      su.x = Math.max(0, ox + (cx - sx) + (window.scrollX - sScrollX));
+      su.y = Math.max(0, oy + (cy - sy) + (window.scrollY - sScrollY));
+      card.style.left = su.x + 'px'; card.style.top = su.y + 'px'; redrawThreadsRaf();
+    };
+    const move = (ev) => { cx = ev.clientX; cy = ev.clientY; apply(); };
+    const onScroll = () => apply();  // ren hjul-scroll uden muse-bevægelse skal også flytte kortet (ellers "fryser" det)
+    // kant-auto-scroll: træk kortet nær top/bund af skærmen → siden ruller selv (fart stiger mod kanten)
+    const EDGE = 90, MAXV = 22; let raf = 0;
+    const tick = () => {
+      let dy = 0;
+      if (cy < EDGE) dy = -MAXV * (EDGE - cy) / EDGE;
+      else if (cy > innerHeight - EDGE) dy = MAXV * (cy - (innerHeight - EDGE)) / EDGE;
+      if (dy) { window.scrollBy(0, dy); apply(); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
     const up = () => {
       document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+      window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf);
       card.releasePointerCapture?.(e.pointerId); card.classList.remove('dragging'); save(); redrawThreads();
     };
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+    window.addEventListener('scroll', onScroll, { passive: true });
   });
   return card;
 }
